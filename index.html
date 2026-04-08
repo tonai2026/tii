@@ -280,59 +280,6 @@ svg.chart{display:block;overflow:visible}
 <body>
 <div id="app"></div>
 
-<!--
-  UPLOAD PANEL - static HTML, never touched by innerHTML.
-  position:fixed so it sits over the content area without needing to be
-  inside the dynamically-rendered shell. Shown/hidden via display only.
--->
-<div id="up-panel" style="display:none;position:fixed;top:80px;left:0;right:0;bottom:0;
-  overflow-y:auto;z-index:30;background:var(--bg);padding:32px 20px">
-  <div style="max-width:580px;margin:0 auto;display:flex;flex-direction:column;gap:16px">
-
-    <!-- Config row -->
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <div style="flex:1;min-width:140px;display:flex;flex-direction:column;gap:4px">
-        <label style="font-size:11px;color:var(--text2);font-weight:600">Fallback month</label>
-        <input id="up-month" placeholder="e.g. 2025-07 (leave blank to auto-detect)"
-          style="border:1px solid var(--input-bd);background:var(--input);color:var(--text);border-radius:6px;padding:7px 10px;font-size:13px;outline:none;width:100%;font-family:inherit">
-      </div>
-      <div style="display:flex;flex-direction:column;gap:4px">
-        <label style="font-size:11px;color:var(--text2);font-weight:600">Type</label>
-        <select id="up-type" style="border:1px solid var(--input-bd);background:var(--input);color:var(--text);border-radius:6px;padding:7px 10px;font-size:13px;outline:none;font-family:inherit">
-          <option value="final">Final (EOM locked)</option>
-          <option value="weekly">Weekly snapshot</option>
-        </select>
-      </div>
-    </div>
-
-    <!-- Dropzone — input overlays the visual div -->
-    <div style="position:relative">
-      <div id="up-dropzone" style="border:2px dashed var(--border);border-radius:12px;
-        padding:36px 24px;text-align:center;pointer-events:none;transition:border-color .2s,background .2s">
-        <div style="font-size:36px;margin-bottom:10px">📂</div>
-        <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px">
-          Click to select files — or drag &amp; drop here
-        </div>
-        <div style="font-size:12px;color:var(--text2)">
-          Multiple .xlsx files supported · month auto-detected from filename
-        </div>
-      </div>
-      <!--
-        THE FILE INPUT — static HTML, opacity:0 overlay, never innerHTML.
-        Position:absolute covers the entire dropzone. Clicking anywhere on
-        the dropzone clicks this input directly. No label, no JS click().
-      -->
-      <input type="file" id="fileUpload" accept=".xlsx,.xls" multiple
-        style="position:absolute;top:0;left:0;width:100%;height:100%;
-               opacity:0;cursor:pointer;z-index:5">
-    </div>
-
-    <!-- Dynamic: queue and data manager (innerHTML is fine here — no file input) -->
-    <div id="up-queue"></div>
-    <div id="up-dm"></div>
-
-  </div>
-</div>
 
 <script>
 'use strict';
@@ -1664,7 +1611,6 @@ document.addEventListener('click', e => {
   if (action==='go-dashboard') { setState({screen:'dashboard',tab:'summary',drillDown:null}); return; }
   if (action==='go-placeholder') { state._placeholderId=arg; setState({screen:'placeholder'}); return; }
   if (action==='set-tab') {
-    if (arg!=='upload') hideUploadPanel();
     setState({tab:arg,drillDown:null,_amSortCol:null,_custSortCol:null,_custSearch:'',_xlSearch:''});
     return;
   }
