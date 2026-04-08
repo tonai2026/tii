@@ -1,0 +1,1906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TII — Total Image Intelligence</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f3f5fb;color:#111827}
+:root{
+  --bg:#f3f5fb;--panel:#fff;--panel2:#f7f9fd;--border:#dfe4f3;--border2:#eaecf5;
+  --text:#111827;--text2:#6b7280;--text3:#d1d5db;
+  --thead:#f7f9fd;--talt:#f3f5fb;--input:#f3f5fb;--input-bd:#dce3f0;
+  --empty:#e4e8f4;--scroll:#c5cfe4;
+  --gold:#9a6e1a;--gold-d:rgba(154,110,26,.1);
+  --green:#16a34a;--green-d:rgba(22,163,74,.1);
+  --red:#dc2626;--red-d:rgba(220,38,38,.1);
+  --blue:#2563eb;--blue-d:rgba(37,99,235,.1);
+  --amber:#d97706;--amber-d:rgba(217,119,6,.1);
+}
+body.dark{
+  --bg:#09090d;--panel:#0f1015;--panel2:#141418;--border:#1a1d28;--border2:#111;
+  --text:#e0e0e0;--text2:#666;--text3:#2a2a2a;
+  --thead:#0d0d11;--talt:#0c0d11;--input:#141418;--input-bd:#2a2d3a;
+  --empty:#1e1e2e;--scroll:#2a2d3a;
+  --gold:#c8912a;--gold-d:rgba(200,145,42,.15);
+  --green:#2ecc71;--green-d:rgba(46,204,113,.12);
+  --red:#e74c3c;--red-d:rgba(231,76,60,.12);
+  --blue:#3b82f6;--blue-d:rgba(59,130,246,.12);
+  --amber:#f59e0b;--amber-d:rgba(245,158,11,.12);
+}
+body{background:var(--bg);color:var(--text)}
+a,button{cursor:pointer;font-family:inherit}
+input,select,textarea{font-family:inherit}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:3px}
+
+/* Layout */
+#app{min-height:100vh}
+.screen{min-height:100vh;display:flex;flex-direction:column}
+
+/* Top bars */
+.topbar{background:var(--panel);border-bottom:1px solid var(--border);height:44px;display:flex;align-items:center;padding:0 20px;gap:10px;position:sticky;top:0;z-index:50;flex-shrink:0}
+.topbar-logo{font-size:14px;font-weight:800;color:var(--gold);letter-spacing:-.5px}
+.topbar-sep{color:var(--text2);font-size:11px}
+.topbar-crumb{font-size:11px;color:var(--text2)}
+.topbar-crumb.active{color:var(--text);font-weight:600}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.btn-ghost{background:transparent;border:1px solid var(--border);border-radius:5px;padding:4px 8px;color:var(--text2);font-size:11px}
+.btn-ghost:hover{border-color:var(--gold);color:var(--gold)}
+
+/* Auth */
+.auth-wrap{min-height:100vh;background:#f8f9fc;display:flex;align-items:center;justify-content:center;padding:20px}
+.auth-box{width:100%;max-width:320px;display:flex;flex-direction:column;align-items:center;gap:28px}
+.auth-logo{text-align:center}
+.auth-logo-mark{font-size:32px;font-weight:800;color:#9a6e1a;letter-spacing:-1px;line-height:1}
+.auth-logo-sub{font-size:11px;color:#9ca3af;margin-top:4px;letter-spacing:.06em}
+.auth-form{width:100%;display:flex;flex-direction:column;gap:10px}
+.auth-form input[type=password]{width:100%;padding:11px 14px;font-size:14px;background:#fff;border:1.5px solid #e5e7eb;border-radius:8px;outline:none;text-align:center;letter-spacing:.1em;transition:border-color .15s}
+.auth-form input[type=password]:focus{border-color:#9a6e1a}
+.auth-form input.error{border-color:#ef4444}
+.auth-err{font-size:12px;color:#ef4444;text-align:center;font-weight:500}
+.auth-admin-banner{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border-radius:6px;background:rgba(154,110,26,.08);border:1px solid rgba(154,110,26,.2)}
+.auth-admin-banner span{font-size:11px;color:#9a6e1a;font-weight:600}
+.btn-enter{width:100%;padding:11px;background:#9a6e1a;border:none;border-radius:8px;color:#fff;font-weight:600;font-size:14px}
+.btn-enter:hover{opacity:.9}
+.btn-admin-toggle{width:100%;padding:9px;background:transparent;border:1px solid #e5e7eb;border-radius:8px;color:#9ca3af;font-size:12px;transition:border-color .15s,color .15s}
+.btn-admin-toggle:hover{border-color:#9a6e1a;color:#9a6e1a}
+.btn-enter-admin{width:100%;padding:11px;background:transparent;border:1.5px solid #9a6e1a;border-radius:8px;color:#9a6e1a;font-weight:600;font-size:14px}
+.btn-enter-admin:hover{background:rgba(154,110,26,.08)}
+.auth-sso{font-size:10px;color:#d1d5db;text-align:center}
+
+/* Tiles */
+.tile-grid{flex:1;display:flex;align-items:center;justify-content:center;padding:40px}
+.tile-row{display:grid;gap:16px}
+.tile-row.cols-3{grid-template-columns:repeat(3,180px)}
+.tile-row.cols-3s{grid-template-columns:repeat(3,160px)}
+@media(max-width:640px){.tile-row.cols-3,.tile-row.cols-3s{grid-template-columns:1fr 1fr}}
+.tile{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:28px 20px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:10px;transition:transform .15s,box-shadow .15s;user-select:none}
+.tile.clickable{cursor:pointer}
+.tile.clickable:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.1)}
+.tile.active-tile{border-color:rgba(154,110,26,.27)}
+.tile.disabled{opacity:.58}
+.tile-icon{font-size:32px}
+.tile-label{font-size:15px;font-weight:600;letter-spacing:-.2px;color:var(--text)}
+.tile.disabled .tile-label{color:var(--text2)}
+.tile-badge{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:3px 9px;border-radius:100px}
+.badge-active{background:rgba(34,197,94,.12);color:#16a34a}
+.badge-next{background:rgba(59,130,246,.1);color:#3b82f6}
+.badge-future{background:rgba(0,0,0,.05);color:var(--text2)}
+.tile-lock{font-size:13px;color:var(--text2);opacity:.35}
+
+/* Dashboard shell */
+.dash-shell{min-height:100vh;display:flex;flex-direction:column;background:var(--bg)}
+.global-bar{background:var(--panel);border-bottom:1px solid var(--border);height:44px;display:flex;align-items:center;padding:0 20px;gap:14px;position:sticky;top:0;z-index:50;flex-shrink:0}
+.global-bar-logo{font-size:14px;font-weight:800;color:var(--gold);letter-spacing:-.5px;flex-shrink:0}
+.ai-input-wrap{flex:1;max-width:460px;margin:0 auto;position:relative}
+.ai-input{width:100%;background:var(--input);border:1px solid var(--border);border-radius:8px;height:30px;padding:0 32px 0 28px;font-size:12px;color:var(--text);outline:none;transition:border-color .15s}
+.ai-input::placeholder{color:var(--text2)}
+.ai-input:focus{border-color:var(--gold)}
+.ai-icon{position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:12px;opacity:.5;pointer-events:none}
+.ai-ask-btn{position:absolute;right:4px;top:50%;transform:translateY(-50%);background:var(--gold);border:none;border-radius:5px;color:#0a0a0a;font-size:10px;font-weight:700;padding:2px 7px;display:none}
+.ai-input:not(:placeholder-shown) ~ .ai-ask-btn{display:block}
+.ai-answer-drop{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--panel);border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.12);z-index:200;max-height:240px;overflow-y:auto;display:none}
+.ai-answer-drop.open{display:block}
+.ai-answer-item{padding:10px 12px;border-bottom:1px solid var(--border2)}
+.ai-answer-item:last-child{border-bottom:none}
+.ai-q{font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:500}
+.ai-a{font-size:12px;color:var(--text);line-height:1.6}
+
+/* Tab strip */
+.tab-strip{background:var(--panel);border-bottom:1px solid var(--border);display:flex;align-items:stretch;padding-left:16px;flex-shrink:0;overflow-x:auto;gap:0}
+.tab-strip::-webkit-scrollbar{height:0}
+.tab-btn{background:transparent;border:none;border-bottom:2px solid transparent;padding:0 14px;height:36px;color:var(--text2);font-size:12px;font-weight:400;white-space:nowrap;transition:all .15s;position:relative}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--gold);border-bottom-color:var(--gold);font-weight:600}
+.tab-btn.tab-am{border-bottom-width:3px;border-bottom-color:rgba(154,110,26,.35);background:var(--gold-d);color:rgba(154,110,26,.75);font-weight:600;padding:0 16px}
+.tab-btn.tab-am.active{border-bottom-color:var(--gold);color:var(--gold)}
+.tab-am-icon{font-size:10px;opacity:.7;margin-right:4px}
+.tab-report-select{display:flex;align-items:center;gap:6px;padding-right:12px;border-right:1px solid var(--border);margin-right:4px;flex-shrink:0}
+.tab-report-select label{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;font-weight:600;white-space:nowrap}
+.tab-report-select select{border:1px solid var(--input-bd);background:var(--input);color:var(--text);border-radius:5px;padding:3px 7px;font-size:11px;outline:none}
+.tab-am-filter{margin-left:auto;display:flex;align-items:center;gap:6px;padding-left:12px;border-left:1px solid var(--border);flex-shrink:0}
+.tab-am-filter label{font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;font-weight:600;white-space:nowrap}
+.tab-am-filter select{border:1px solid var(--input-bd);background:var(--input);color:var(--text);border-radius:5px;padding:3px 7px;font-size:11px;outline:none}
+.tab-am-filter select.active-filter{border-color:var(--gold);background:var(--gold-d);color:var(--gold);font-weight:600}
+.filter-clear{background:transparent;border:none;color:var(--text2);font-size:13px;padding:0 2px}
+
+/* Content */
+.dash-body{flex:1;overflow-y:auto;padding-bottom:0}
+.dash-content{max-width:1100px;margin:0 auto;padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+
+/* Panels & cards */
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px}
+.shead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.shead-title{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.9px}
+.shead-right{font-size:11px;color:var(--text2)}
+.kpi-row{display:flex;gap:10px;flex-wrap:wrap}
+.kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px;flex:1;min-width:120px}
+.kpi-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:1.1px;margin-bottom:7px;font-weight:600}
+.kpi-value{font-size:20px;font-weight:700;letter-spacing:-.5px;line-height:1}
+.kpi-sub{font-size:11px;color:var(--text2);margin-top:5px}
+
+/* Tables */
+.tbl-wrap{overflow-x:auto;overflow-y:auto;max-height:520px;border-radius:8px 8px 0 0;border:1px solid var(--border);border-bottom:none}
+.tbl-foot{border:1px solid var(--border);border-top:2px solid var(--border);border-radius:0 0 8px 8px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{padding:8px 12px;background:var(--thead);border-bottom:1px solid var(--border);font-size:10px;color:var(--text2);text-align:left;font-weight:700;white-space:nowrap;position:sticky;top:0;z-index:2;text-transform:uppercase;letter-spacing:.5px;user-select:none}
+th.sortable{cursor:pointer}
+th.sortable:hover{color:var(--gold)}
+th.sorted{color:var(--gold)}
+th.right,td.right{text-align:right}
+td{padding:8px 12px;border-bottom:1px solid var(--border2);vertical-align:middle}
+tr:nth-child(even) td{background:var(--talt)}
+tr:nth-child(odd) td{background:transparent}
+.tbl-foot table tr td{background:var(--thead) !important}
+.td-link{color:var(--gold);text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-weight:600}
+.td-link:hover{opacity:.8}
+.prog-bar-wrap{height:4px;background:var(--empty);border-radius:2px;min-width:80px}
+.prog-bar-fill{height:100%;border-radius:2px;transition:width .3s}
+.foot-row td{padding:9px 12px;font-weight:700;background:var(--thead) !important}
+
+/* Charts */
+.chart-wrap{width:100%;overflow:hidden}
+svg.chart{display:block;overflow:visible}
+
+/* Filter banner */
+.filter-banner{display:flex;align-items:center;gap:10px;padding:7px 14px;background:var(--gold-d);border:1px solid rgba(154,110,26,.27);border-radius:8px;font-size:12px}
+.filter-banner-label{color:var(--gold);font-weight:600}
+.filter-banner-clear{margin-left:auto;background:transparent;border:none;color:var(--text2);font-size:12px;cursor:pointer}
+
+/* Progress bars inline */
+.pbar{height:3px;background:var(--empty);border-radius:2px;margin-top:3px}
+.pbar-fill{height:100%;border-radius:2px}
+
+/* Upload */
+.upload-area{max-width:540px;width:100%;display:flex;flex-direction:column;gap:12px}
+.dropzone{border:2px dashed var(--border);border-radius:12px;padding:32px 24px;text-align:center;cursor:pointer;transition:all .2s}
+.dropzone:hover,.dropzone.drag{border-color:var(--gold);background:var(--gold-d)}
+.dropzone-icon{font-size:32px;margin-bottom:10px}
+.dropzone-text{font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px}
+.dropzone-sub{font-size:12px;color:var(--text2)}
+.queue-wrap{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.queue-header{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.8px}
+.queue-item{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border2);font-size:12px}
+.queue-item:last-child{border-bottom:none}
+.queue-item.ok{background:var(--green-d)}
+.queue-item.error{background:var(--red-d)}
+.qi-status{font-size:15px;font-weight:700;flex-shrink:0}
+.qi-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.qi-month{font-size:11px;color:#3b82f6;font-weight:600}
+.qi-err{font-size:11px;color:var(--red)}
+.qi-size{font-size:11px;color:var(--text2);flex-shrink:0}
+.cfg-row{display:flex;gap:8px;flex-wrap:wrap}
+.cfg-field{display:flex;flex-direction:column;gap:4px}
+.cfg-field.grow{flex:1;min-width:120px}
+.cfg-label{font-size:11px;color:var(--text2);font-weight:600}
+.cfg-field input,.cfg-field select{border:1px solid var(--input-bd);background:var(--input);color:var(--text);border-radius:6px;padding:7px 10px;font-size:13px;outline:none;width:100%}
+.info-banner{background:var(--blue-d);border:1px solid rgba(59,130,246,.2);border-radius:8px;padding:9px 14px;font-size:12px;color:var(--text2);line-height:1.5}
+.info-banner b{color:#3b82f6}
+
+/* Data manager */
+.dm-group{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:8px}
+.dm-group-hdr{padding:9px 14px;background:var(--panel2);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.dm-group-title{font-size:12px;font-weight:700;color:var(--text)}
+.dm-group-count{font-size:11px;color:var(--text2)}
+.dm-row{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border2);cursor:pointer}
+.dm-row:last-child{border-bottom:none}
+.dm-row:hover{background:var(--gold-d)}
+.dm-row.active-ds{background:var(--gold-d)}
+.dm-badge{padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;background:var(--green-d);color:var(--green);flex-shrink:0;min-width:40px;text-align:center}
+.dm-badge.weekly{background:var(--gold-d);color:var(--gold)}
+.dm-name{flex:1;min-width:0;font-size:12px;font-weight:500;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dm-meta{font-size:11px;color:var(--text2);margin-top:1px}
+.dm-active-dot{font-size:10px;color:var(--gold);font-weight:700;flex-shrink:0}
+.dm-del{background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:13px;padding:3px 8px;flex-shrink:0}
+.dm-del:hover{border-color:var(--red);color:var(--red)}
+
+/* Notifications/placeholder */
+.placeholder-screen{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:40px;text-align:center}
+.placeholder-icon{font-size:48px;opacity:.35}
+.placeholder-title{font-size:22px;font-weight:300;color:var(--text);letter-spacing:-.3px}
+.placeholder-badge{display:inline-block;padding:4px 14px;border-radius:100px;background:var(--blue-d);color:#3b82f6;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.placeholder-desc{font-size:13px;color:var(--text2);max-width:260px;line-height:1.7;margin-top:4px}
+
+/* Drill-down back button */
+.back-btn{background:transparent;border:1px solid var(--border);border-radius:6px;padding:5px 12px;color:var(--text2);font-size:12px}
+.back-btn:hover{border-color:var(--gold);color:var(--gold)}
+.drill-header{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.drill-title{font-size:22px;font-weight:700;color:var(--text)}
+.drill-sub{font-size:11px;color:var(--text2)}
+
+/* Pace status badges */
+.status-ahead{background:var(--green-d);color:var(--green)}
+.status-on_track{background:var(--gold-d);color:var(--gold)}
+.status-behind{background:var(--amber-d);color:var(--amber)}
+.status-critical{background:var(--red-d);color:var(--red)}
+.status-badge{padding:2px 8px;border-radius:100px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px}
+
+/* Normlog */
+.normlog{background:var(--panel);border:1px solid var(--amber);border-radius:10px;overflow:hidden}
+.normlog-hdr{display:flex;align-items:center;justify-content:space-between;padding:9px 16px;cursor:pointer;font-size:12px;color:var(--text)}
+.normlog-body{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--text2);line-height:1.7;max-height:200px;overflow-y:auto}
+
+/* Footer */
+.dash-footer{background:var(--panel);border-top:1px solid var(--border);padding:5px 20px;display:flex;justify-content:space-between;font-size:10px;color:var(--text2);flex-shrink:0}
+
+/* Responsive */
+@media(max-width:768px){
+  .dash-content{padding:12px 14px}
+  .kpi{min-width:calc(50% - 5px)}
+  .tile-row.cols-3,.tile-row.cols-3s{grid-template-columns:1fr 1fr}
+  .tile{padding:20px 16px}
+  .tile-icon{font-size:28px}
+  .tile-label{font-size:14px}
+  .global-bar{padding:0 12px}
+  .ai-input-wrap{max-width:200px}
+}
+
+/* Animations */
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.fade-up{animation:fadeUp .3s ease both}
+.shake{animation:shake .4s ease}
+
+/* Misc */
+.no-data{display:flex;flex-direction:column;align-items:center;justify-content:center;height:65vh;gap:16px;text-align:center}
+.no-data-icon{font-size:36px}
+.no-data-title{font-weight:600;color:var(--text)}
+.no-data-desc{font-size:13px;color:var(--text2);max-width:280px;line-height:1.6}
+.no-data-link{background:none;border:none;color:var(--gold);font-weight:700;font-size:13px;cursor:pointer;text-decoration:underline}
+.search-bar{border:1px solid var(--input-bd);background:var(--input);color:var(--text);border-radius:6px;padding:5px 12px;font-size:12px;outline:none;width:200px}
+.cb-label{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:5px;cursor:pointer}
+.section-controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.section-title{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.9px;flex:1}
+.delete-all-btn{font-size:12px;color:var(--text2);background:transparent;border:1px solid var(--border);border-radius:6px;padding:4px 12px}
+.delete-all-btn:hover{border-color:var(--red);color:var(--red)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<!-- Permanent file input — must stay in static DOM, never innerHTML -->
+<input type="file" id="tii-file-input" accept=".xlsx,.xls" multiple style="position:fixed;left:-9999px;top:-9999px;opacity:0;pointer-events:none">
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════
+const AUTH_CONFIG = {
+  passwords: { admin:'admin2026', viewer:'ti2026' }
+  // Future: replace with MSAL/Azure AD
+};
+
+const TIG_SCHEMA = {
+  version:'1.0',
+  primarySheet:'25-26 Budget-Actual Invoiced',
+  headerRowIndex:1,
+  dataStartRow:2,
+  actualRowMarker:'Actual',
+  budgetRowMarker:'Budget',
+  typeDiscriminatorCol:3,
+  accountManagerCol:0,
+  categoryCol:1,
+  customerCol:2,
+  monthColumns:{4:'2025-07',5:'2025-08',6:'2025-09',7:'2025-10',8:'2025-11',9:'2025-12',
+                10:'2026-01',11:'2026-02',12:'2026-03',13:'2026-04',14:'2026-05',15:'2026-06'},
+  ignoredCols:[16,17,18],
+  skipCol3Values:new Set(['New','Budget-','% of Budget','$ Variance','% Variance','.']),
+  skipCol2Values:new Set(['Total']),
+  skipCol0Values:new Set(['Total All Sales']),
+  expectedPairs:104,
+};
+
+const MONTH_ABBR = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_NAMES_MAP = {january:'01',february:'02',march:'03',april:'04',may:'05',june:'06',
+  july:'07',august:'08',september:'09',october:'10',november:'11',december:'12',
+  jan:'01',feb:'02',mar:'03',apr:'04',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+
+// ═══════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════
+const state = {
+  auth: null,            // null | 'viewer' | 'admin'
+  screen: 'home',       // 'home' | 'sales-hub' | 'dashboard'
+  tab: 'summary',
+  activeId: null,
+  drillDown: null,       // null | {level:'am',am} | {level:'customer',am,customerKey,customerName}
+  amFilter: '',
+  isDark: false,
+  datasets: [],
+  uploadQueue: [],
+  uploadRunning: false,
+  sortCol: '',
+  sortDir: 'desc',
+  showGeneral: true,
+  search: '',
+  normlogOpen: false,
+  aiHistory: [],
+  aiOpen: false,
+  authMode: 'viewer',   // 'viewer' | 'admin'
+  authError: false,
+  deleteConfirm: null,  // id to confirm delete
+};
+
+function setState(updates) {
+  Object.assign(state, updates);
+  render();
+}
+
+// ═══════════════════════════════════════════════════════════
+// STORAGE
+// ═══════════════════════════════════════════════════════════
+const STORE_KEY = 'tii_ds_v2';
+
+function storageAll() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch { return {}; }
+}
+function storageSave(all) {
+  localStorage.setItem(STORE_KEY, JSON.stringify(all));
+}
+function storageList() {
+  return Object.values(storageAll())
+    .map(d=>({id:d.id,type:d.type,monthKey:d.monthKey,week:d.week,
+              isLocked:d.isLocked,uploadedAt:d.uploadedAt,metadata:d.metadata}))
+    .sort((a,b)=>b.monthKey.localeCompare(a.monthKey));
+}
+function storageGet(id) { return storageAll()[id]||null; }
+function storageStore(normResult, dataType, week) {
+  const {metadata} = normResult;
+  const weekStr = week!=null ? String(week) : 'final';
+  const id = `${metadata.monthKey}_${dataType}_${weekStr}`;
+  const env = {id, type:dataType, monthKey:metadata.monthKey, week,
+    isLocked:dataType==='final', uploadedAt:new Date().toISOString(),
+    metadata, rawRows:normResult.rawRows, analysisRecords:normResult.analysisRecords};
+  const all = storageAll();
+  all[id] = env;
+  storageSave(all);
+  return env;
+}
+function storageDelete(id) { const all=storageAll(); delete all[id]; storageSave(all); }
+function storageDeleteAll() { storageSave({}); }
+function storageLatestId() {
+  const list = storageList();
+  return list.length ? list[0].id : null;
+}
+
+// ═══════════════════════════════════════════════════════════
+// XLSX / ZIP PARSER
+// ═══════════════════════════════════════════════════════════
+async function unzip(arrayBuffer) {
+  const bytes = new Uint8Array(arrayBuffer);
+  const view = new DataView(arrayBuffer);
+  const files = {};
+  // Find End of Central Directory
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= 0; i--) {
+    if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('Not a ZIP file');
+  const cdOffset = view.getUint32(eocd + 16, true);
+  const cdCount  = view.getUint16(eocd + 10, true);
+  let off = cdOffset;
+  for (let i = 0; i < cdCount; i++) {
+    if (view.getUint32(off, true) !== 0x02014b50) break;
+    const comp   = view.getUint16(off + 10, true);
+    const csz    = view.getUint32(off + 20, true);
+    const fnLen  = view.getUint16(off + 28, true);
+    const exLen  = view.getUint16(off + 30, true);
+    const cmLen  = view.getUint16(off + 32, true);
+    const lhOff  = view.getUint32(off + 42, true);
+    const fname  = new TextDecoder().decode(bytes.slice(off+46, off+46+fnLen));
+    const lhFnL  = view.getUint16(lhOff + 26, true);
+    const lhExL  = view.getUint16(lhOff + 28, true);
+    const dataOff= lhOff + 30 + lhFnL + lhExL;
+    const cdata  = bytes.slice(dataOff, dataOff + csz);
+    if (comp === 0) {
+      files[fname] = new TextDecoder('utf-8',{fatal:false}).decode(cdata);
+    } else if (comp === 8 && typeof DecompressionStream !== 'undefined') {
+      try {
+        const ds = new DecompressionStream('deflate-raw');
+        const w = ds.writable.getWriter(), r = ds.readable.getReader();
+        w.write(cdata); w.close();
+        const chunks = []; let total = 0;
+        while (true) { const {done,value} = await r.read(); if (done) break; chunks.push(value); total+=value.length; }
+        const out = new Uint8Array(total); let p = 0;
+        for (const c of chunks) { out.set(c,p); p+=c.length; }
+        files[fname] = new TextDecoder('utf-8',{fatal:false}).decode(out);
+      } catch {}
+    }
+    off += 46 + fnLen + exLen + cmLen;
+  }
+  return files;
+}
+
+function colToIdx(col) {
+  let r = 0;
+  for (const c of col.toUpperCase()) r = r*26 + (c.charCodeAt(0)-64);
+  return r-1;
+}
+
+function parseXMLStr(str) {
+  return new DOMParser().parseFromString(str,'application/xml');
+}
+
+function getSharedStrings(xmlStr) {
+  if (!xmlStr) return [];
+  const doc = parseXMLStr(xmlStr);
+  return [...doc.querySelectorAll('si')].map(si =>
+    [...si.querySelectorAll('t')].map(t=>t.textContent).join('')
+  );
+}
+
+function findSheetFile(workbookXml, workbookRelsXml, targetName) {
+  // Find rId for sheet with matching name
+  const wbDoc = parseXMLStr(workbookXml);
+  const sheets = [...wbDoc.querySelectorAll('sheet')];
+  let rId = null;
+  for (const sh of sheets) {
+    const name = sh.getAttribute('name')||'';
+    if (name.toLowerCase().trim() === targetName.toLowerCase().trim()) {
+      rId = sh.getAttribute('r:id') || sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id');
+      break;
+    }
+  }
+  if (!rId && sheets.length > 0) {
+    // fallback: take first sheet
+    rId = sheets[0].getAttribute('r:id') || sheets[0].getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id');
+  }
+  if (!rId) return 'xl/worksheets/sheet1.xml';
+  // Find target in rels
+  const relsDoc = parseXMLStr(workbookRelsXml);
+  const rels = [...relsDoc.querySelectorAll('Relationship')];
+  for (const rel of rels) {
+    if (rel.getAttribute('Id') === rId) {
+      const target = rel.getAttribute('Target')||'';
+      return target.startsWith('/') ? target.slice(1) : 'xl/' + target.replace(/^\.\.\//, '');
+    }
+  }
+  return 'xl/worksheets/sheet1.xml';
+}
+
+function parseWorksheet(wsXml, ss) {
+  const doc = parseXMLStr(wsXml);
+  const rows = [];
+  for (const rowEl of doc.querySelectorAll('row')) {
+    const cells = [...rowEl.querySelectorAll('c')];
+    if (!cells.length) { rows.push([]); continue; }
+    let maxCol = 0;
+    for (const c of cells) {
+      const ref = c.getAttribute('r')||'';
+      const colStr = ref.replace(/\d+/g,'');
+      if (colStr) maxCol = Math.max(maxCol, colToIdx(colStr));
+    }
+    const row = Array(maxCol+1).fill(null);
+    for (const cell of cells) {
+      const ref = cell.getAttribute('r')||'';
+      const colStr = ref.replace(/\d+/g,'');
+      if (!colStr) continue;
+      const ci = colToIdx(colStr);
+      const t = cell.getAttribute('t');
+      const v = cell.querySelector('v');
+      if (!v) continue;
+      const raw = v.textContent;
+      if (t==='s') row[ci] = ss[parseInt(raw)]||'';
+      else if (t==='b') row[ci] = raw==='1';
+      else if (!t||t==='n') row[ci] = parseFloat(raw);
+      else row[ci] = raw;
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+async function parseXLSX(arrayBuffer, monthKey) {
+  const files = await unzip(arrayBuffer);
+  const ss = getSharedStrings(files['xl/sharedStrings.xml']);
+  const sheetFile = findSheetFile(
+    files['xl/workbook.xml']||'',
+    files['xl/_rels/workbook.xml.rels']||'',
+    TIG_SCHEMA.primarySheet
+  );
+  const wsKey = sheetFile.startsWith('xl/') ? sheetFile : 'xl/'+sheetFile;
+  const wsXml = files[wsKey] || files['xl/worksheets/sheet1.xml'];
+  if (!wsXml) throw new Error('Sheet not found in file');
+  const rawRows = parseWorksheet(wsXml, ss);
+  const result = normalizeRows(rawRows, monthKey);
+  return result;
+}
+
+// ═══════════════════════════════════════════════════════════
+// NORMALIZER
+// ═══════════════════════════════════════════════════════════
+function normalizeRows(rawRows, monthKey) {
+  const S = TIG_SCHEMA;
+  const log = [];
+  const monthKeys = Object.values(S.monthColumns);
+  const analysisRecords = [];
+
+  const hdr = rawRows[S.headerRowIndex]||[];
+  let i = S.dataStartRow;
+  let pairs = 0;
+
+  while (i < rawRows.length) {
+    const rowA = rawRows[i];
+    if (!rowA || rowA.length === 0) { i++; continue; }
+    const col3A = String(rowA[S.typeDiscriminatorCol]||'').trim();
+    const col0  = String(rowA[S.accountManagerCol]||'').trim().toUpperCase();
+    const col2  = String(rowA[S.customerCol]||'').trim();
+    if (!col3A || S.skipCol3Values.has(col3A) || S.skipCol2Values.has(col2) || S.skipCol0Values.has(col0)) { i++; continue; }
+    if (col3A !== S.actualRowMarker) { i++; continue; }
+    // Look for budget row (next row that is Budget or skip New)
+    let rowB = null;
+    let j = i+1;
+    while (j < rawRows.length) {
+      const candidate = rawRows[j];
+      if (!candidate || candidate.length===0) { j++; continue; }
+      const c3 = String(candidate[S.typeDiscriminatorCol]||'').trim();
+      if (c3 === S.budgetRowMarker) { rowB = candidate; break; }
+      if (c3 === S.actualRowMarker) break;
+      j++;
+    }
+    if (!rowB) { i++; continue; }
+
+    const am = col0 || '(UNKNOWN)';
+    const customer = col2;
+    const isGeneral = col2.toLowerCase().startsWith('general') ||
+      String(rowA[S.categoryCol]||'').toLowerCase().includes('general');
+    const customerKey = isGeneral ? `${am}__GENERAL` : col2;
+
+    for (const [colIdx, month] of Object.entries(S.monthColumns)) {
+      const cidx = parseInt(colIdx);
+      const sales = typeof rowA[cidx]==='number' ? rowA[cidx] : null;
+      const budget = typeof rowB[cidx]==='number' ? rowB[cidx] : null;
+      analysisRecords.push({
+        accountManager:am, customer, customerKey,
+        isGeneralBucket:isGeneral,
+        date:month,
+        sales: sales||0,
+        budget: budget||0,
+        rawSales: sales,
+        rawBudget: budget,
+      });
+    }
+    pairs++;
+    i = j+1;
+  }
+
+  log.push({level:'info',msg:`${pairs} customer/AM pairs · ${analysisRecords.length} records`});
+  return {
+    analysisRecords, rawRows,
+    metadata:{monthKey, customerCount:pairs, recordCount:analysisRecords.length, schemaVersion:TIG_SCHEMA.version},
+    log
+  };
+}
+
+// ═══════════════════════════════════════════════════════════
+// CALCULATIONS
+// ═══════════════════════════════════════════════════════════
+function getTotalSales(recs) { return recs.reduce((s,r)=>s+(r.sales||0),0); }
+function getTotalBudget(recs) { return recs.reduce((s,r)=>s+(r.budget||0),0); }
+function safePct(a,b) { return b>0 ? +(a/b*100).toFixed(2) : null; }
+function pctColor(p) {
+  if (p==null) return 'var(--text2)';
+  if (p>=100) return 'var(--green)';
+  if (p>=75)  return 'var(--gold)';
+  if (p>=50)  return 'var(--amber)';
+  return 'var(--red)';
+}
+
+function getMonthlyTrend(recs) {
+  const map = {};
+  for (const r of recs) {
+    if (!map[r.date]) map[r.date]={date:r.date,sales:0,budget:0};
+    map[r.date].sales  += r.sales||0;
+    map[r.date].budget += r.budget||0;
+  }
+  return Object.values(map).sort((a,b)=>a.date.localeCompare(b.date)).map(m=>({
+    ...m,
+    label: (() => { const [y,mo]=m.date.split('-'); return (MONTH_ABBR[parseInt(mo)]||mo)+' '+y.slice(2); })()
+  }));
+}
+
+function getAMs(recs) {
+  const map = {};
+  for (const r of recs) {
+    const am = r.accountManager||'?';
+    if (!map[am]) map[am]={accountManager:am,sales:0,budget:0};
+    map[am].sales  += r.sales||0;
+    map[am].budget += r.budget||0;
+  }
+  return Object.values(map).map(a=>({...a,pct:safePct(a.sales,a.budget),gap:a.budget-a.sales}))
+    .sort((a,b)=>b.sales-a.sales);
+}
+
+function getCustomers(recs) {
+  const map = {};
+  for (const r of recs) {
+    const k = r.customerKey||r.customer;
+    if (!map[k]) map[k]={customerKey:k,customer:r.customer,accountManager:r.accountManager,
+      isGeneralBucket:r.isGeneralBucket,sales:0,budget:0};
+    map[k].sales  += r.sales||0;
+    map[k].budget += r.budget||0;
+  }
+  return Object.values(map).map(c=>({...c,pct:safePct(c.sales,c.budget),gap:c.budget-c.sales}))
+    .sort((a,b)=>b.sales-a.sales);
+}
+
+function computePace(recs) {
+  const trend = getMonthlyTrend(recs);
+  if (!trend.length) return null;
+  const active = trend.filter(m=>m.sales>0);
+  if (!active.length) return null;
+  const elapsed = active.length;
+  const remaining = trend.length - elapsed;
+  const totalSales = getTotalSales(recs);
+  const totalBudget = getTotalBudget(recs);
+  const cumBudget = active.reduce((s,m)=>s+m.budget,0);
+  const pacePct = safePct(totalSales, cumBudget);
+  const paceGap = +(cumBudget - totalSales).toFixed(2);
+  const runRate = +(totalSales/elapsed).toFixed(2);
+  const projected = +(runRate*trend.length).toFixed(2);
+  const projVsBudget = safePct(projected, totalBudget);
+  const required = remaining>0 ? +((totalBudget-totalSales)/remaining).toFixed(2) : null;
+  const reqVsRR = (required&&runRate) ? safePct(required,runRate) : null;
+  const pp = pacePct||0;
+  const status = pp>=100?'ahead':pp>=90?'on_track':pp>=70?'behind':'critical';
+  return {elapsed,remaining,totalSales,totalBudget,cumBudget:+cumBudget.toFixed(2),
+    pacePct,paceGap,runRate,projected,projVsBudget,required,reqVsRR,status,
+    lastLabel:active.at(-1).label};
+}
+
+function getAMPace(recs) {
+  const byAM = {};
+  for (const r of recs) {
+    const am = r.accountManager||'?';
+    if (!byAM[am]) byAM[am]=[];
+    byAM[am].push(r);
+  }
+  return Object.entries(byAM)
+    .map(([am,rs])=>({accountManager:am,...computePace(rs)}))
+    .filter(a=>a.pacePct!=null)
+    .sort((a,b)=>(a.pacePct||0)-(b.pacePct||0));
+}
+
+// ═══════════════════════════════════════════════════════════
+// FORMATTERS
+// ═══════════════════════════════════════════════════════════
+function fmtC(v, short=false) {
+  const n = parseFloat(v)||0;
+  if (short && Math.abs(n)>=1e6) return '$'+(n/1e6).toFixed(2)+'M';
+  if (short && Math.abs(n)>=1e3) return '$'+(n/1e3).toFixed(0)+'K';
+  return new Intl.NumberFormat('en-AU',{style:'currency',currency:'AUD',maximumFractionDigits:0}).format(n);
+}
+function fmtP(p) { return p==null?'—':`${p.toFixed(1)}%`; }
+function fmtMonth(mk) {
+  if (!mk) return mk;
+  const m = mk.match(/^(\d{4})-(\d{2})$/);
+  if (m) return (MONTH_ABBR[parseInt(m[2])]||m[2])+' '+m[1];
+  if (/^\d{4}-\d{4}$/.test(mk)) { const [y1,y2]=mk.split('-'); return `FY ${y1}–${y2.slice(2)}`; }
+  return mk;
+}
+function fmtDSLabel(d, first=false) {
+  const month = fmtMonth(d.monthKey);
+  const type = d.type==='final'?'Final':`Week ${d.week||'?'}`;
+  return `${first?'▶ ':''}${month} · ${type}`;
+}
+function parseMonthFromFilename(name) {
+  const n = name.toLowerCase();
+  for (const [mon,num] of Object.entries(MONTH_NAMES_MAP)) {
+    const re = new RegExp(`${mon}[\\s\\-_]*(eom[\\s\\-_]*)?([12]\\d{3})`,'i');
+    const m = n.match(re);
+    if (m) return `${m[2]}-${num}`;
+  }
+  const iso = n.match(/([12]\d{3})[-_](0[1-9]|1[0-2])/);
+  if (iso) return `${iso[1]}-${iso[2]}`;
+  return null;
+}
+function axFmt(v) { return v>=1e6?`$${(v/1e6).toFixed(1)}M`:v>=1e3?`$${(v/1e3).toFixed(0)}K`:`$${v}`; }
+function h(tag,attrs,inner){
+  const a=Object.entries(attrs||{}).map(([k,v])=>v!=null&&v!==false?` ${k}="${v}"`:k==='checked'&&v?` checked`:``).join('');
+  if(inner===undefined)return`<${tag}${a}>`;
+  return`<${tag}${a}>${inner}</${tag}>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// SVG CHARTS
+// ═══════════════════════════════════════════════════════════
+function svgBarChart(data, w=700, h=200) {
+  if (!data.length) return '';
+  const max = Math.max(...data.map(d=>Math.max(d.sales||0,d.budget||0)),1);
+  const bw = Math.floor((w / data.length) * 0.7);
+  const gap = (w - bw*data.length) / (data.length+1);
+  const pad = 30; const ch = h - pad;
+  let bars = '';
+  data.forEach((d,i) => {
+    const x = gap + i*(bw+gap);
+    const sh = Math.max(1, (d.sales/max)*ch);
+    const bh = Math.max(1, ((d.budget||0)/max)*ch);
+    bars += `<rect x="${x}" y="${ch-bh+pad/2}" width="${bw}" height="${bh}" fill="var(--empty)" rx="2"/>`;
+    bars += `<rect x="${x}" y="${ch-sh+pad/2}" width="${bw}" height="${sh}" fill="var(--gold)" rx="2"/>`;
+    bars += `<text x="${x+bw/2}" y="${h}" text-anchor="middle" fill="var(--text2)" font-size="9">${d.label||''}</text>`;
+  });
+  // Y axis labels
+  const yLabels = [0, max/2, max].map(v =>
+    `<text x="0" y="${ch-(v/max)*ch+pad/2+4}" fill="var(--text2)" font-size="9">${axFmt(v)}</text>`
+  ).join('');
+  return `<svg class="chart" viewBox="0 0 ${w} ${h}" width="100%" height="${h}">${yLabels}${bars}</svg>`;
+}
+
+function svgHBar(data, w=400, rowH=24) {
+  if (!data.length) return '';
+  const max = Math.max(...data.map(d=>d.sales||0),1);
+  const h = data.length * rowH + 4;
+  const labelW = 80; const barW = w - labelW - 60;
+  let out = '';
+  data.forEach((d,i) => {
+    const y = i*rowH + 2;
+    const bw = Math.max(0, ((d.sales||0)/max)*barW);
+    const color = i===0?'var(--gold)':'var(--empty)';
+    out += `<text x="${labelW-4}" y="${y+rowH*0.65}" text-anchor="end" fill="var(--text2)" font-size="10">${(d.label||d.accountManager||'').slice(0,12)}</text>`;
+    out += `<rect x="${labelW}" y="${y+2}" width="${barW}" height="${rowH-6}" fill="var(--empty)" rx="2"/>`;
+    out += `<rect x="${labelW}" y="${y+2}" width="${bw}" height="${rowH-6}" fill="${color}" rx="2"/>`;
+    out += `<text x="${labelW+bw+4}" y="${y+rowH*0.65}" fill="var(--text2)" font-size="10">${fmtC(d.sales,true)}</text>`;
+  });
+  return `<svg class="chart" viewBox="0 0 ${w} ${h}" width="100%" height="${h}">${out}</svg>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════
+function activeDataset() {
+  if (!state.activeId) return null;
+  return storageGet(state.activeId);
+}
+function activeRecords() {
+  const ds = activeDataset();
+  if (!ds) return [];
+  const recs = ds.analysisRecords||[];
+  if (!state.amFilter) return recs;
+  return recs.filter(r=>r.accountManager===state.amFilter);
+}
+function allAMs(records) {
+  return [...new Set(records.map(r=>r.accountManager).filter(Boolean))].sort();
+}
+function sortRows(rows, col, dir='desc') {
+  return [...rows].sort((a,b)=>{
+    const av=a[col], bv=b[col];
+    if(av==null&&bv==null)return 0; if(av==null)return 1; if(bv==null)return-1;
+    return dir==='asc'?(av>bv?1:-1):(av<bv?1:-1);
+  });
+}
+const AM_FILTER_TABS = new Set(['summary','customers','budget','pace','notifications']);
+function progBarHtml(pct, color) {
+  const w = Math.min(pct||0, 100);
+  return `<div class="prog-bar-wrap"><div class="prog-bar-fill" style="width:${w}%;background:${color||'var(--gold)'}"></div></div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// SCREEN RENDERERS
+// ═══════════════════════════════════════════════════════════
+
+function renderAuth() {
+  const isAdmin = state.authMode === 'admin';
+  return `
+<div class="auth-wrap">
+  <div class="auth-box fade-up">
+    <div class="auth-logo">
+      <div class="auth-logo-mark">TII</div>
+      <div class="auth-logo-sub">TOTAL IMAGE INTELLIGENCE</div>
+    </div>
+    <div class="auth-form ${state.authError?'shake':''}" id="auth-form">
+      ${isAdmin ? `<div class="auth-admin-banner">
+        <span>Admin access</span>
+        <button class="btn-ghost" data-action="auth-cancel-admin">✕ Cancel</button>
+      </div>` : ''}
+      <input type="password" id="auth-pw" placeholder="Password"
+        class="${state.authError?'error':''}"
+        autocomplete="current-password"
+        data-action-keyenter="auth-submit">
+      ${state.authError ? '<div class="auth-err">Incorrect password</div>' : ''}
+      <button class="${isAdmin?'btn-enter-admin':'btn-enter'}" data-action="auth-submit">
+        ${isAdmin ? 'Enter as Admin' : 'Enter'}
+      </button>
+      ${!isAdmin ? `<button class="btn-admin-toggle" data-action="auth-show-admin">Admin access</button>` : ''}
+    </div>
+    <div class="auth-sso">Microsoft SSO coming soon</div>
+  </div>
+</div>`;
+}
+
+function renderHome() {
+  const tiles = [
+    {id:'sales',icon:'📊',label:'Sales',active:true,badge:'active'},
+    {id:'operations',icon:'⚙️',label:'Operations',active:false,badge:'future'},
+    {id:'finance',icon:'💹',label:'Finance',active:false,badge:'future'},
+  ];
+  const tileHtml = tiles.map(t=>`
+    <div class="tile ${t.active?'clickable active-tile':'disabled'}" ${t.active?`data-action="go-sales-hub"`:''}">
+      <div class="tile-icon">${t.icon}</div>
+      <div class="tile-label">${t.label}</div>
+      <div class="tile-badge badge-${t.active?'active':'future'}">${t.active?'Active':'Coming Soon'}</div>
+      ${!t.active?'<div class="tile-lock">🔒</div>':''}
+    </div>`).join('');
+  return `
+<div class="screen" style="background:var(--bg)">
+  <style>*{box-sizing:border-box}</style>
+  <div class="topbar">
+    <div class="topbar-logo">TII</div>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <span style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:600;padding-right:8px;border-right:1px solid var(--border)">${state.auth==='admin'?'Admin':'Viewer'}</span>
+      <button class="btn-ghost" data-action="toggle-dark">${state.isDark?'☀':'🌙'}</button>
+      <button class="btn-ghost" data-action="sign-out">Sign out</button>
+    </div>
+  </div>
+  <div class="tile-grid">
+    <div class="tile-row cols-3">${tileHtml}</div>
+  </div>
+</div>`;
+}
+
+function renderSalesHub() {
+  const tiles = [
+    {id:'dashboard',icon:'📊',label:'Dashboard',status:'active'},
+    {id:'intelligence',icon:'🧠',label:'Intelligence',status:'next'},
+    {id:'forecast-engine',icon:'🔭',label:'Forecast Engine',status:'future'},
+  ];
+  const tileHtml = tiles.map(t=>{
+    const clickable = t.status!=='future';
+    const action = t.status==='active'?'go-dashboard':t.status==='next'?`go-placeholder:${t.id}`:null;
+    return `
+    <div class="tile ${clickable?'clickable':'disabled'} ${t.status==='active'?'active-tile':''}"
+      ${action?`data-action="${action}"`:''}">
+      <div class="tile-icon">${t.icon}</div>
+      <div class="tile-label">${t.label}</div>
+      <div class="tile-badge badge-${t.status==='active'?'active':t.status==='next'?'next':'future'}">
+        ${t.status==='active'?'Active':t.status==='next'?'Next Phase':'Next Project'}
+      </div>
+      ${t.status==='future'?'<div class="tile-lock">🔒</div>':''}
+    </div>`;
+  }).join('');
+  return `
+<div class="screen" style="background:var(--bg)">
+  <div class="topbar">
+    <button class="btn-ghost" data-action="go-home">← Home</button>
+    <div class="topbar-logo">TII</div>
+    <span class="topbar-sep">›</span>
+    <span class="topbar-crumb active">Sales</span>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <span style="font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:600;padding-right:8px;border-right:1px solid var(--border)">${state.auth==='admin'?'Admin':'Viewer'}</span>
+      <button class="btn-ghost" data-action="toggle-dark">${state.isDark?'☀':'🌙'}</button>
+      <button class="btn-ghost" data-action="sign-out">Sign out</button>
+    </div>
+  </div>
+  <div class="tile-grid">
+    <div class="tile-row cols-3s">${tileHtml}</div>
+  </div>
+</div>`;
+}
+
+function renderPlaceholder(id) {
+  const info = {intelligence:{icon:'🧠',title:'Intelligence'},accounts:{icon:'🤝',title:'Accounts'}};
+  const p = info[id]||{icon:'🔧',title:id};
+  return `
+<div class="screen" style="background:var(--bg)">
+  <div class="topbar">
+    <button class="btn-ghost" data-action="go-sales-hub">← Sales</button>
+    <div class="topbar-logo">TII</div>
+    <span class="topbar-sep">›</span><span class="topbar-crumb">Sales</span>
+    <span class="topbar-sep">›</span><span class="topbar-crumb active">${p.title}</span>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <button class="btn-ghost" data-action="toggle-dark">${state.isDark?'☀':'🌙'}</button>
+      <button class="btn-ghost" data-action="sign-out">Sign out</button>
+    </div>
+  </div>
+  <div class="placeholder-screen">
+    <div class="placeholder-icon">${p.icon}</div>
+    <div class="placeholder-title">${p.title}</div>
+    <div class="placeholder-badge">Next Phase</div>
+    <div class="placeholder-desc">In development. Available in the next release.</div>
+  </div>
+</div>`;
+}
+
+// ─── Dashboard shell ──────────────────────────────────────
+function renderDashboard() {
+  const ds = activeDataset();
+  const recs = activeRecords();
+  const allRecs = ds?.analysisRecords||[];
+  const datasets = storageList();
+  const ams = allAMs(allRecs);
+
+  // AI bar
+  const aiHtml = `
+  <div class="ai-input-wrap">
+    <span class="ai-icon">🤖</span>
+    <input class="ai-input" id="ai-input" placeholder="Ask anything about sales, customers, budgets…"
+      data-action-keyenter="ai-ask" ${!ds?'disabled title="Load a dataset first"':''}>
+    <button class="ai-ask-btn" data-action="ai-ask">Ask</button>
+    <div class="ai-answer-drop ${state.aiOpen&&state.aiHistory.length?'open':''}" id="ai-drop">
+      ${state.aiHistory.length?`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border)">
+          <span style="font-size:11px;color:var(--text2);font-weight:600">Recent answers</span>
+          <button style="background:transparent;border:none;color:var(--text2);cursor:pointer;font-size:11px" data-action="ai-clear">Clear</button>
+        </div>
+        ${[...state.aiHistory].reverse().map(h=>`
+          <div class="ai-answer-item">
+            <div class="ai-q">Q: ${h.q}</div>
+            <div class="ai-a">${h.a}</div>
+          </div>`).join('')}` : ''}
+    </div>
+  </div>`;
+
+  // Tab strip
+  const VIEWER_TABS = [['summary','Summary'],['am','Account Managers'],['customers','Customers'],
+    ['budget','Budget Performance'],['pace','Pace & Forecast'],['notifications','Notifications'],['excel','Source File']];
+  const ADMIN_TABS  = [...VIEWER_TABS,['upload','Upload'],['debug','Debug']];
+  const tabs = state.auth==='admin' ? ADMIN_TABS : VIEWER_TABS;
+  const showAMFilter = AM_FILTER_TABS.has(state.tab) && ams.length>0 && ds;
+
+  const tabHtml = tabs.map(([k,l])=>{
+    const isAM = k==='am';
+    const isCurrent = state.tab===k;
+    return `<button class="tab-btn ${isCurrent?'active':''} ${isAM?'tab-am':''}" data-action="set-tab:${k}">
+      ${isAM?`<span class="tab-am-icon">⤵</span>`:''}${l}
+    </button>`;
+  }).join('');
+
+  const dsOpts = datasets.map((d,i)=>
+    `<option value="${d.id}" ${d.id===state.activeId?'selected':''}>${fmtDSLabel(d,i===0)}</option>`
+  ).join('');
+
+  const amOpts = `<option value="">All AMs</option>${ams.map(a=>`<option value="${a}" ${a===state.amFilter?'selected':''}>${a}</option>`).join('')}`;
+
+  const tabStrip = `
+  <div class="tab-strip">
+    ${datasets.length?`<div class="tab-report-select">
+      <label>Report</label>
+      <select data-action="set-dataset">${dsOpts}</select>
+    </div>`:''}
+    ${tabHtml}
+    ${showAMFilter?`<div class="tab-am-filter">
+      <label>AM</label>
+      <select class="${state.amFilter?'active-filter':''}" data-action="set-am-filter">${amOpts}</select>
+      ${state.amFilter?`<button class="filter-clear" data-action="clear-am-filter" title="Clear">✕</button>`:''}
+    </div>`:''}
+  </div>`;
+
+  // Main body
+  let bodyHtml = '';
+  if (state.drillDown?.level==='customer') {
+    bodyHtml = renderCustomerDrill(allRecs);
+  } else if (state.drillDown?.level==='am') {
+    bodyHtml = renderAMDrill(allRecs);
+  } else if (!ds) {
+    bodyHtml = renderNoData();
+  } else {
+    bodyHtml = renderTabContent(recs, ds, allRecs, datasets);
+  }
+
+  return `
+<div class="dash-shell">
+  <div class="global-bar">
+    <button class="btn-ghost" data-action="go-sales-hub" style="font-size:11px;flex-shrink:0">⊞</button>
+    <div class="global-bar-logo">TII</div>
+    <span style="font-size:11px;color:var(--text2)">›</span>
+    <span style="font-size:11px;color:var(--text2)">Sales</span>
+    <span style="font-size:11px;color:var(--text2)">›</span>
+    <span style="font-size:11px;font-weight:600;color:var(--text)">Dashboard</span>
+    ${aiHtml}
+    <div style="display:flex;gap:6px;flex-shrink:0">
+      <span style="font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:.1em;font-weight:600;padding-right:8px;border-right:1px solid var(--border);display:flex;align-items:center">${state.auth==='admin'?'Admin':'Viewer'}</span>
+      <button class="btn-ghost" data-action="toggle-dark">${state.isDark?'☀':'🌙'}</button>
+      <button class="btn-ghost" data-action="sign-out" style="display:none" id="signout-desk">Sign out</button>
+    </div>
+  </div>
+  ${tabStrip}
+  <div class="dash-body">
+    <div class="dash-content" id="dash-content">
+      ${bodyHtml}
+    </div>
+  </div>
+  <div class="dash-footer">
+    <span><b style="color:var(--gold)">TII</b> · Sales Dashboard</span>
+    <span>${ds?`${(ds.analysisRecords||[]).length} records · ${new Set((ds.analysisRecords||[]).map(r=>r.customerKey)).size} customers`:'No data loaded'}</span>
+  </div>
+</div>`;
+}
+
+function renderNoData() {
+  return `<div class="no-data">
+    <div class="no-data-icon">📊</div>
+    <div class="no-data-title">No data loaded</div>
+    <div class="no-data-desc">
+      ${state.auth==='admin'
+        ?`Go to <button class="no-data-link" data-action="set-tab:upload">Upload</button> to add a file.`
+        :'Ask your administrator to load data.'}
+    </div>
+  </div>`;
+}
+
+function renderTabContent(recs, ds, allRecs, datasets) {
+  const tab = state.tab;
+  let filterBanner = '';
+  if (state.amFilter && AM_FILTER_TABS.has(tab)) {
+    filterBanner = `<div class="filter-banner">
+      <span class="filter-banner-label">Filtered:</span>
+      <span style="color:var(--text)">${state.amFilter} only</span>
+      <button class="filter-banner-clear" data-action="clear-am-filter">✕ Clear filter</button>
+    </div>`;
+  }
+  const normLog = (state.auth==='admin' && ds) ? renderNormLog(ds) : '';
+  const content = (() => {
+    if (tab==='summary')  return renderSummary(recs);
+    if (tab==='am')       return renderAMTab(allRecs);
+    if (tab==='customers')return renderCustomers(recs);
+    if (tab==='budget')   return renderBudget(recs);
+    if (tab==='pace')     return renderPace(recs);
+    if (tab==='notifications') return renderNotifications(recs);
+    if (tab==='excel')    return renderSourceFile(ds);
+    if (tab==='upload' && state.auth==='admin') return renderUpload(datasets);
+    if (tab==='debug' && state.auth==='admin') return renderDebug(ds);
+    return '<p style="color:var(--text2);font-size:13px;padding:20px">Coming soon.</p>';
+  })();
+  return `${normLog}${filterBanner}${content}`;
+}
+
+// ─── Summary ──────────────────────────────────────────────
+function renderSummary(recs) {
+  const ts = getTotalSales(recs), tb = getTotalBudget(recs);
+  const pct = safePct(ts,tb);
+  const gap = tb-ts;
+  const trend = getMonthlyTrend(recs);
+  const top = getCustomers(recs).slice(0,10);
+  const ams = new Set(recs.map(r=>r.accountManager).filter(Boolean)).size;
+
+  const kpis = `<div class="kpi-row">
+    ${kpiCard('YTD Sales',fmtC(ts,true),`${new Set(recs.map(r=>r.customerKey)).size} customers`,'var(--gold)')}
+    ${kpiCard('Total Budget',fmtC(tb,true),'annual target','var(--text2)')}
+    ${kpiCard('% to Budget',fmtP(pct),'YTD achievement',pctColor(pct))}
+    ${kpiCard('Gap',fmtC(Math.abs(gap),true),gap>0?'behind target':'over target',gap>0?'var(--red)':'var(--green)')}
+  </div>`;
+
+  const chart = trend.length ? `<div class="panel"><div class="shead"><span class="shead-title">Monthly Sales vs Budget</span></div>
+    <div class="chart-wrap">${svgBarChart(trend)}</div></div>` : '';
+
+  const custRows = top.map((c,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:${i<top.length-1?'1px solid var(--border2)':'none'}">
+      <div style="width:20px;text-align:right;font-size:11px;color:var(--text2)">${i+1}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.customer}</div>
+        <div style="font-size:11px;color:var(--text2)">${c.accountManager}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:13px;font-weight:700;color:var(--gold)">${fmtC(c.sales,true)}</div>
+        <div style="font-size:11px;font-weight:600;color:${pctColor(c.pct)}">${fmtP(c.pct)}</div>
+      </div>
+    </div>`).join('');
+
+  const custPanel = `<div class="panel"><div class="shead"><span class="shead-title">Top 10 Customers</span></div>${custRows}</div>`;
+  return kpis+chart+custPanel;
+}
+
+function kpiCard(label,value,sub,color) {
+  return `<div class="kpi">
+    <div class="kpi-label">${label}</div>
+    <div class="kpi-value" style="color:${color||'var(--gold)'}">${value}</div>
+    ${sub?`<div class="kpi-sub">${sub}</div>`:''}
+  </div>`;
+}
+
+// ─── Account Managers ─────────────────────────────────────
+function renderAMTab(allRecs) {
+  const rows = state.sortCol==='am_col'
+    ? sortRows(getAMs(allRecs), state._amSortCol||'sales', state._amSortDir||'desc')
+    : getAMs(allRecs);
+
+  const sortedRows = state._amSortCol
+    ? sortRows(getAMs(allRecs), state._amSortCol, state._amSortDir||'desc')
+    : getAMs(allRecs);
+
+  const totS = sortedRows.reduce((s,r)=>s+r.sales,0);
+  const totB = sortedRows.reduce((s,r)=>s+r.budget,0);
+  const sortIndicator = (col) => {
+    if (state._amSortCol!==col) return '<span style="opacity:.25">↕</span>';
+    return state._amSortDir==='asc'?'↑':'↓';
+  };
+  const th = (label,col,align='left') =>
+    `<th class="sortable ${state._amSortCol===col?'sorted':''} ${align==='right'?'right':''}" data-action="sort-am:${col}">${label} ${sortIndicator(col)}</th>`;
+
+  const rows2html = sortedRows.map((r,i)=>`
+    <tr>
+      <td style="text-align:center;color:var(--text2);font-size:11px">${i+1}</td>
+      <td><span class="td-link" data-action="drill-am:${r.accountManager}">${r.accountManager}</span></td>
+      <td class="right" style="color:var(--gold);font-weight:700">${fmtC(r.sales,true)}</td>
+      <td class="right" style="color:var(--text2)">${fmtC(r.budget,true)}</td>
+      <td class="right" style="font-weight:700;color:${pctColor(r.pct)}">${fmtP(r.pct)}</td>
+      <td class="right" style="color:${r.gap>0?'var(--red)':'var(--green)'};font-weight:600">${fmtC(Math.abs(r.gap),true)}</td>
+      <td style="min-width:100px">${progBarHtml(r.pct,pctColor(r.pct))}</td>
+    </tr>`).join('');
+
+  const totPct = safePct(totS,totB);
+  const footRow = `<tr class="foot-row">
+    <td colspan="2" style="font-weight:700;color:var(--text)">TOTAL</td>
+    <td class="right" style="color:var(--gold)">${fmtC(totS,true)}</td>
+    <td class="right" style="color:var(--text2)">${fmtC(totB,true)}</td>
+    <td class="right" style="color:${pctColor(totPct)};font-weight:700">${fmtP(totPct)}</td>
+    <td colspan="2"></td>
+  </tr>`;
+
+  return `<div class="panel" style="padding:0;overflow:hidden">
+    <div style="padding:12px 16px 0"><div class="shead"><span class="shead-title">Account Manager Scorecard — YTD</span>
+      <span class="shead-right">Click name to drill down · Click column to sort</span></div></div>
+    <div class="tbl-wrap" style="border-radius:0;border:none;border-top:1px solid var(--border)">
+      <table><thead><tr>
+        <th style="width:32px">#</th>${th('Account Manager','accountManager')}${th('YTD Sales','sales','right')}
+        ${th('Annual Budget','budget','right')}${th('% to Budget','pct','right')}
+        ${th('Gap','gap','right')}<th style="min-width:100px">Progress</th>
+      </tr></thead><tbody>${rows2html}</tbody></table>
+    </div>
+    <div class="tbl-foot"><table><tbody>${footRow}</tbody></table></div>
+  </div>`;
+}
+
+// ─── Customers ────────────────────────────────────────────
+function renderCustomers(recs) {
+  let custs = getCustomers(recs);
+  if (!state.showGeneral) custs = custs.filter(c=>!c.isGeneralBucket);
+  const search = state._custSearch||'';
+  if (search) custs = custs.filter(c=>
+    c.customer.toLowerCase().includes(search.toLowerCase()) ||
+    (c.accountManager||'').toLowerCase().includes(search.toLowerCase())
+  );
+  const sorted = state._custSortCol
+    ? sortRows(custs, state._custSortCol, state._custSortDir||'desc')
+    : custs;
+
+  const totS = sorted.reduce((s,c)=>s+(c.sales||0),0);
+  const totB = sorted.reduce((s,c)=>s+(c.budget||0),0);
+  const totGap = totB-totS;
+  const totPct = safePct(totS,totB);
+
+  const sortInd = col => state._custSortCol!==col?'<span style="opacity:.25">↕</span>':state._custSortDir==='asc'?'↑':'↓';
+  const th = (label,col,align='left') =>
+    `<th class="sortable ${state._custSortCol===col?'sorted':''} ${align==='right'?'right':''}" data-action="sort-cust:${col}">${label} ${sortInd(col)}</th>`;
+
+  const allCusts = getCustomers(recs);
+  const rows = sorted.map((c,i)=>`
+    <tr>
+      <td style="text-align:center;color:var(--text2);font-size:11px">${allCusts.indexOf(allCusts.find(x=>x.customerKey===c.customerKey))+1}</td>
+      <td style="font-weight:600;color:${c.isGeneralBucket?'var(--text2)':'var(--text)'}">
+        ${c.customer}${c.isGeneralBucket?'<span style="font-size:10px;color:var(--text2);margin-left:4px">(bucket)</span>':''}
+      </td>
+      <td style="color:var(--text2);font-size:11px">${c.accountManager}</td>
+      <td class="right" style="color:var(--gold);font-weight:600">${fmtC(c.sales,true)}</td>
+      <td class="right" style="color:var(--text2)">${fmtC(c.budget,true)}</td>
+      <td class="right" style="font-weight:700;color:${pctColor(c.pct)}">${fmtP(c.pct)}</td>
+      <td class="right" style="color:${c.gap>0?'var(--red)':'var(--green)'};font-size:11px">${fmtC(Math.abs(c.gap),true)}</td>
+      <td style="min-width:90px">${progBarHtml(c.pct,pctColor(c.pct))}</td>
+    </tr>`).join('');
+
+  const footRow = `<tr class="foot-row">
+    <td colspan="3" style="font-weight:700;color:var(--text)">TOTAL — ${sorted.length} customers</td>
+    <td class="right" style="color:var(--gold)">${fmtC(totS,true)}</td>
+    <td class="right" style="color:var(--text2)">${fmtC(totB,true)}</td>
+    <td class="right" style="color:${pctColor(totPct)};font-weight:700">${fmtP(totPct)}</td>
+    <td class="right" style="color:${totGap>0?'var(--red)':'var(--green)'};">${fmtC(Math.abs(totGap),true)}</td>
+    <td>${progBarHtml(totPct,pctColor(totPct))}</td>
+  </tr>`;
+
+  return `<div class="panel" style="padding:0;overflow:hidden">
+    <div style="padding:12px 16px 8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span class="shead-title" style="flex:1">Customer Rankings — YTD</span>
+      <label class="cb-label"><input type="checkbox" ${state.showGeneral?'checked':''} data-action="toggle-general"> Show General Buckets</label>
+      <input class="search-bar" id="cust-search" placeholder="Search customer or AM…" value="${search}" data-action="cust-search">
+    </div>
+    <div class="tbl-wrap" style="border-radius:0;border:none;border-top:1px solid var(--border)">
+      <table><thead><tr>
+        <th style="width:32px">#</th>${th('Customer','customer')}${th('AM','accountManager')}
+        ${th('YTD Sales','sales','right')}${th('Annual Budget','budget','right')}
+        ${th('% to Budget','pct','right')}${th('Gap','gap','right')}<th style="min-width:90px">Progress</th>
+      </tr></thead><tbody>${rows}</tbody></table>
+    </div>
+    <div class="tbl-foot"><table><tbody>${footRow}</tbody></table></div>
+    <div style="padding:6px 16px;font-size:11px;color:var(--text2)">
+      ${sorted.length} of ${custs.length} customers${search?` matching "${search}"`:''}
+      ${sorted.length<custs.length?' · totals reflect filtered rows only':''}
+    </div>
+  </div>`;
+}
+
+// ─── Budget ───────────────────────────────────────────────
+function renderBudget(recs) {
+  const custs = getCustomers(recs);
+  const over    = custs.filter(c=>c.pct!=null&&c.pct>=100);
+  const onTrack = custs.filter(c=>c.pct!=null&&c.pct>=50&&c.pct<100);
+  const atRisk  = custs.filter(c=>c.pct!=null&&c.pct<50&&c.budget>0);
+  const noData  = custs.filter(c=>c.pct==null);
+  const amRows  = getAMs(recs);
+
+  const kpis = `<div class="kpi-row">
+    ${kpiCard('Over Budget',over.length,'customers','var(--green)')}
+    ${kpiCard('On Track ≥50%',onTrack.length,'customers','var(--gold)')}
+    ${kpiCard('At Risk <50%',atRisk.length,'customers','var(--red)')}
+    ${kpiCard('No Budget',noData.length,'customers','var(--text2)')}
+  </div>`;
+
+  const amChart = `<div class="panel"><div class="shead"><span class="shead-title">AM Budget Achievement</span></div>
+    <div class="chart-wrap">${svgHBar(amRows.map(a=>({...a,label:a.accountManager})),600,24)}</div></div>`;
+
+  const renderGroup = (title,items,color) => items.length ? `
+    <div class="panel"><div class="shead"><span class="shead-title" style="color:${color}">${title} (${items.length})</span></div>
+    ${items.slice(0,20).map(c=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border2)">
+        <div style="flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.customer}</div>
+        <div style="font-size:11px;color:var(--text2)">${c.accountManager}</div>
+        <div style="font-size:13px;font-weight:700;color:${color}">${fmtP(c.pct)}</div>
+        <div style="width:80px">${progBarHtml(c.pct,color)}</div>
+      </div>`).join('')}
+    </div>` : '';
+
+  const groups = `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px">
+    ${renderGroup('✅ Over Budget',over,'var(--green)')}
+    ${renderGroup('🟡 On Track',onTrack,'var(--gold)')}
+    ${renderGroup('🔴 At Risk',atRisk,'var(--red)')}
+  </div>`;
+
+  return kpis+amChart+groups;
+}
+
+// ─── Pace ─────────────────────────────────────────────────
+function renderPace(recs) {
+  const p = computePace(recs);
+  if (!p) return '<div style="color:var(--text2);font-size:13px;padding:20px">No data.</div>';
+  const sc = {ahead:'var(--green)',on_track:'var(--gold)',behind:'var(--amber)',critical:'var(--red)'}[p.status]||'var(--text2)';
+  const actPct = Math.min(p.totalSales/p.totalBudget*100,100);
+  const tgtPct = Math.min(p.cumBudget/p.totalBudget*100,100);
+  const statusLabel = p.status.replace('_',' ').toUpperCase();
+
+  const headline = `<div style="background:${sc}18;border:1px solid ${sc}44;border-left:4px solid ${sc};border-radius:10px;padding:16px 20px">
+    <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+      <div style="font-size:36px;font-weight:800;color:${sc};line-height:1">${fmtP(p.pacePct)}</div>
+      <div style="font-size:14px;color:var(--text);font-weight:600">of pace target</div>
+      <span style="padding:3px 10px;border-radius:100px;background:${sc}22;color:${sc};font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px">${statusLabel}</span>
+    </div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.6">
+      After <b style="color:var(--text)">${p.elapsed} months</b> (${p.lastLabel}),
+      expected <b style="color:var(--text)">${fmtC(p.cumBudget,true)}</b> — actual
+      <b style="color:${sc}">${fmtC(p.totalSales,true)}</b>, a
+      <b style="color:${p.paceGap>0?'var(--red)':'var(--green)'}">${fmtC(Math.abs(p.paceGap),true)} ${p.paceGap>0?'shortfall':'surplus'}</b>.
+    </div>
+  </div>`;
+
+  // Pace bar
+  const paceBar = `<div class="panel"><div class="shead"><span class="shead-title">Progress vs Annual Budget</span></div>
+    <div style="position:relative;height:10px;background:var(--empty);border-radius:5px;margin:8px 0">
+      <div style="position:absolute;left:0;top:0;height:100%;width:${actPct}%;background:${sc};border-radius:5px;transition:width .4s"></div>
+      <div style="position:absolute;top:-4px;width:2px;height:18px;background:var(--text2);border-radius:1px;left:${tgtPct}%;transform:translateX(-1px)"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text2);margin-top:6px">
+      <span style="color:${sc};font-weight:700">${fmtC(p.totalSales,true)} actual</span>
+      <span>pace target: ${fmtC(p.cumBudget,true)}</span>
+      <span>budget: ${fmtC(p.totalBudget,true)}</span>
+    </div>
+  </div>`;
+
+  const kpis = `<div class="kpi-row">
+    ${kpiCard('Pace Achievement',fmtP(p.pacePct),`actual vs ${fmtC(p.cumBudget,true)} expected`,sc)}
+    ${kpiCard('Monthly Run Rate',fmtC(p.runRate,true),`avg over ${p.elapsed} months`,'var(--gold)')}
+    ${kpiCard('Required Monthly',fmtC(p.required,true),`each of ${p.remaining} remaining months`,p.reqVsRR>150?'var(--red)':'var(--amber)')}
+    ${kpiCard('Full-Year Projection',fmtC(p.projected,true),`${fmtP(p.projVsBudget)} of annual budget`,p.projVsBudget>=95?'var(--green)':'var(--amber)')}
+  </div>`;
+
+  const amPace = getAMPace(recs);
+  const statusCfg = {ahead:'var(--green)',on_track:'var(--gold)',behind:'var(--amber)',critical:'var(--red)'};
+  const amRows = amPace.map((a,i)=>`
+    <tr>
+      <td style="font-weight:700;color:var(--text)">${a.accountManager}</td>
+      <td class="right" style="color:var(--gold);font-weight:600">${fmtC(a.totalSales,true)}</td>
+      <td class="right" style="color:var(--text2)">${fmtC(a.cumBudget,true)}</td>
+      <td class="right" style="font-weight:700;color:${statusCfg[a.status]||'var(--text2)'}">${fmtP(a.pacePct)}</td>
+      <td class="right" style="color:var(--text2)">${fmtC(a.runRate,true)}</td>
+      <td class="right" style="color:${(a.reqVsRR||0)>150?'var(--red)':'var(--amber)'};font-weight:600">${fmtC(a.required,true)}</td>
+      <td><span class="status-badge status-${a.status}" style="background:${statusCfg[a.status]||'var(--text2)'}22;color:${statusCfg[a.status]}">${a.status.replace('_',' ')}</span></td>
+    </tr>`).join('');
+
+  const amTable = `<div class="panel" style="padding:0;overflow:hidden">
+    <div style="padding:12px 16px 0"><div class="shead"><span class="shead-title">Pace by Account Manager</span>
+      <span class="shead-right">sorted worst → best</span></div></div>
+    <div class="tbl-wrap" style="border-radius:0;border:none;border-top:1px solid var(--border)">
+      <table><thead><tr>
+        <th>AM</th><th class="right">Actual</th><th class="right">Should Be</th>
+        <th class="right">Pace %</th><th class="right">Run Rate/mo</th>
+        <th class="right">Required/mo</th><th>Status</th>
+      </tr></thead><tbody>${amRows}</tbody></table>
+    </div>
+  </div>`;
+
+  return headline+paceBar+kpis+amTable;
+}
+
+// ─── Notifications ────────────────────────────────────────
+function renderNotifications(recs) {
+  const p = computePace(recs);
+  const ts = getTotalSales(recs), tb = getTotalBudget(recs);
+  const pct = safePct(ts,tb);
+  const ams = getAMs(recs);
+  const top = getCustomers(recs)[0];
+
+  const insights = [
+    {icon:'📈',color:'var(--gold)',title:'Budget Pace Alert',
+     body:p?`Business is at ${fmtP(p.pacePct)} of pace — requires ${fmtC(p.required,true)}/month to hit target.`:'Pace data unavailable.'},
+    {icon:'🏆',color:'var(--green)',title:'Top Performer',
+     body:top?`${top.customer} is leading with ${fmtC(top.sales,true)} YTD (${fmtP(top.pct)} of budget).`:'No customer data.'},
+    {icon:'⚠️',color:'var(--amber)',title:'AMs Below 80%',
+     body:(() => { const u=ams.filter(a=>(a.pct||0)<80&&a.budget>0); return u.length?`${u.map(a=>a.accountManager).join(', ')} tracking below 80%.`:'All AMs above 80%.'; })()},
+    {icon:'💰',color:'var(--blue)',title:'YTD Revenue',
+     body:`${fmtC(ts,true)} invoiced against ${fmtC(tb,true)} budget — ${fmtP(pct)} achieved.`},
+    {icon:'🔔',color:'#8b5cf6',title:'Smart Nudges',
+     body:'Personalised nudges based on team activity coming soon.'},
+  ];
+
+  const blurHtml = `<div style="position:relative">
+    <div style="filter:blur(1.5px);pointer-events:none;user-select:none;opacity:.7">
+      <div class="panel">
+        <div class="shead"><span class="shead-title">Notifications</span><span class="shead-right">5 insights</span></div>
+        ${insights.map((item,i)=>`
+          <div style="display:flex;align-items:flex-start;gap:14px;padding:13px 0;border-bottom:${i<insights.length-1?'1px solid var(--border2)':'none'}">
+            <div style="width:36px;height:36px;border-radius:10px;flex-shrink:0;background:${item.color}18;display:flex;align-items:center;justify-content:center;font-size:18px">${item.icon}</div>
+            <div style="flex:1"><div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px">${item.title}</div>
+              <div style="font-size:12px;color:var(--text2);line-height:1.6">${item.body}</div></div>
+            <div style="flex-shrink:0;padding:3px 10px;border-radius:100px;background:${item.color}22;color:${item.color};font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px">New</div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:10">
+      <div style="position:absolute;inset:0;overflow:hidden;pointer-events:none">
+        ${[0,1,2,3,4].map(i=>`<div style="position:absolute;top:${10+i*20}%;left:-10%;width:120%;font-size:48px;font-weight:900;color:${state.isDark?'rgba(255,255,255,.03)':'rgba(0,0,0,.04)'};letter-spacing:.3em;text-transform:uppercase;transform:rotate(-25deg);white-space:nowrap;pointer-events:none">COMING SOON</div>`).join('')}
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:32px 40px;text-align:center;max-width:340px;z-index:1;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+        <div style="font-size:36px;margin-bottom:12px">🔔</div>
+        <div style="font-size:22px;font-weight:700;color:var(--text);margin-bottom:8px">Notifications</div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:16px">Smart alerts, budget nudges, and performance insights — coming in the next release.</div>
+        <div style="display:inline-block;padding:5px 16px;border-radius:100px;background:linear-gradient(135deg,#c8912a,#e8b44a);color:#07080f;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase">Coming Soon</div>
+      </div>
+    </div>
+  </div>`;
+  return blurHtml;
+}
+
+// ─── Source File ──────────────────────────────────────────
+function renderSourceFile(ds) {
+  if (!ds?.rawRows) return '<div style="font-size:13px;color:var(--text2);padding:16px">No source file available.</div>';
+  const rows = ds.rawRows;
+  const hdrIdx = TIG_SCHEMA.headerRowIndex;
+  const search = state._xlSearch||'';
+  const filtered = search ? rows.filter(r=>(r||[]).some(c=>String(c||'').toLowerCase().includes(search.toLowerCase()))) : rows;
+  const rowsHtml = filtered.slice(0,200).map((row,ri)=>{
+    const isHdr = ri===hdrIdx;
+    const bg = isHdr?(state.isDark?'#1a1d28':'#eef2ff'):'transparent';
+    return `<tr style="background:${bg}">
+      <td style="padding:2px 6px;font-size:10px;color:var(--text2);border-right:1px solid var(--border2);text-align:right">${ri+1}</td>
+      ${(row||[]).map(cell=>`<td style="padding:2px 10px;font-size:11px;white-space:nowrap;color:${isHdr?'var(--gold)':cell==null||cell===''?'var(--text3)':'var(--text)'};font-weight:${isHdr?700:400};border-right:1px solid var(--border2)">${cell==null||cell===''?'':String(cell)}</td>`).join('')}
+    </tr>`;
+  }).join('');
+
+  return `<div class="panel" style="padding:0">
+    <div style="padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
+      <div style="font-size:13px;font-weight:600;color:var(--text)">📄 ${ds.metadata?.fileName||'Source file'}</div>
+      <div style="font-size:12px;color:var(--text2)">${rows.length} rows</div>
+      <input class="search-bar" style="margin-left:auto" id="xl-search" placeholder="Search rows…" value="${search}" data-action="xl-search">
+    </div>
+    <div style="overflow:auto;max-height:calc(100vh - 320px);border-radius:0 0 10px 10px">
+      <table style="border-collapse:collapse;font-size:11px;white-space:nowrap;min-width:100%">
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+    ${filtered.length>200?`<div style="padding:8px 16px;font-size:11px;color:var(--text2)">Showing first 200 of ${filtered.length} rows</div>`:''}
+  </div>`;
+}
+
+// ─── Upload ───────────────────────────────────────────────
+function renderUpload(datasets) {
+  const queueHtml = state.uploadQueue.length ? `
+    <div class="queue-wrap">
+      <div class="queue-header">
+        <span>${state.uploadRunning?'Processing…':`${state.uploadQueue.filter(f=>f.state==='ok').length}/${state.uploadQueue.length} complete`}</span>
+        ${!state.uploadRunning?`<button data-action="queue-clear" style="font-size:11px;color:var(--text2);background:transparent;border:none;cursor:pointer;text-decoration:underline">Clear done</button>`:''}
+      </div>
+      ${state.uploadQueue.map(f=>`
+        <div class="queue-item ${f.state}">
+          <div class="qi-status" style="color:${f.state==='ok'?'var(--green)':f.state==='error'?'var(--red)':f.state==='processing'?'var(--gold)':'var(--text2)'}">
+            ${f.state==='ok'?'✓':f.state==='error'?'✗':f.state==='processing'?'⋯':'·'}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div class="qi-name">${f.name}</div>
+            ${f.detectedMonth?`<div class="qi-month">→ ${f.detectedMonth}</div>`:''}
+            ${f.msg?`<div class="${f.state==='error'?'qi-err':''}" style="${f.state!=='error'?'font-size:11px;color:var(--green)':''}">${f.msg}</div>`:''}
+          </div>
+          <div class="qi-size">${(f.size/1024).toFixed(0)} KB</div>
+        </div>`).join('')}
+    </div>` : '';
+
+  const dmGroups = (() => {
+    if (!datasets.length) return '<div style="font-size:13px;color:var(--text2);padding:16px;text-align:center">No datasets yet. Upload a file above.</div>';
+    const byMonth = {};
+    for (const d of datasets) {
+      if (!byMonth[d.monthKey]) byMonth[d.monthKey]=[];
+      byMonth[d.monthKey].push(d);
+    }
+    return Object.entries(byMonth).sort(([a],[b])=>b.localeCompare(a)).map(([month,items])=>`
+      <div class="dm-group">
+        <div class="dm-group-hdr">
+          <span class="dm-group-title">${fmtMonth(month)}</span>
+          <span class="dm-group-count">${items.length} file${items.length!==1?'s':''}</span>
+        </div>
+        ${items.map(d=>`
+          <div class="dm-row ${d.id===state.activeId?'active-ds':''}" data-action="select-ds:${d.id}">
+            <div class="dm-badge ${d.type==='final'?'':'weekly'}">${d.type==='final'?'Final':`W${d.week||'?'}`}</div>
+            <div style="flex:1;min-width:0">
+              <div class="dm-name">${d.metadata?.fileName||d.id}</div>
+              <div class="dm-meta">${d.metadata?.customerCount} customers · ${new Date(d.uploadedAt).toLocaleDateString('en-AU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
+            </div>
+            ${d.id===state.activeId?'<div class="dm-active-dot">● active</div>':''}
+            ${state.deleteConfirm===d.id
+              ?`<button data-action="confirm-delete:${d.id}" style="padding:4px 10px;background:var(--red);border:none;border-radius:5px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px">Delete</button>
+                <button data-action="cancel-delete" style="padding:4px 8px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:11px;cursor:pointer">Cancel</button>`
+              :`<button class="dm-del" data-action="delete-ds:${d.id}" title="Delete">🗑</button>`}
+          </div>`).join('')}
+      </div>`).join('');
+  })();
+
+  return `
+    <div class="upload-area" style="margin:0 auto;max-width:600px;padding:32px 0">
+      <div style="margin-bottom:20px">
+        <div style="font-size:22px;font-weight:300;color:var(--text);margin-bottom:4px">Data Management</div>
+        <div style="font-size:12px;color:var(--text2)">Schema v${TIG_SCHEMA.version} · Auto-detects month from filename</div>
+      </div>
+      <div class="info-banner" style="margin-bottom:12px">
+        <b>Auto-detect on:</b> Month is read from filename (e.g. "August EOM 2025" → Aug 2025). Set fallback only if not in filename.
+      </div>
+      <div class="cfg-row" style="margin-bottom:12px">
+        <div class="cfg-field grow">
+          <label class="cfg-label">Fallback month <span style="font-weight:400">(if not in filename)</span></label>
+          <input id="upload-month" placeholder="e.g. 2025-07 (leave blank to auto-detect)">
+        </div>
+        <div class="cfg-field">
+          <label class="cfg-label">Type</label>
+          <select id="upload-type">
+            <option value="final">Final (EOM locked)</option>
+            <option value="weekly">Weekly snapshot</option>
+          </select>
+        </div>
+        <div class="cfg-field" id="week-field" style="display:none">
+          <label class="cfg-label">Week</label>
+          <select id="upload-week">${[1,2,3,4,5].map(w=>`<option value="${w}">Week ${w}</option>`).join('')}</select>
+        </div>
+      </div>
+      <label class="dropzone" id="dropzone" for="tii-file-input" style="cursor:pointer;display:block">
+        <div class="dropzone-icon">📂</div>
+        <div class="dropzone-text">Click to select files — or drag &amp; drop here</div>
+        <div class="dropzone-sub">Month auto-detected from filename · multiple .xlsx files accepted</div>
+      </label>
+      ${queueHtml}
+      <div style="margin-top:24px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <span class="shead-title">Stored Datasets</span>
+          ${datasets.length?`<button class="delete-all-btn" data-action="delete-all-datasets">🗑 Delete all</button>`:''}
+        </div>
+        ${dmGroups}
+      </div>
+    </div>`;
+}
+
+// ─── Debug ────────────────────────────────────────────────
+function renderDebug(ds) {
+  if (!ds) return '<div style="color:var(--text2);font-size:13px;padding:20px">No dataset loaded.</div>';
+  const info = {id:ds.id,type:ds.type,monthKey:ds.monthKey,week:ds.week,
+    uploadedAt:ds.uploadedAt,...ds.metadata};
+  return `<div class="panel"><div class="shead"><span class="shead-title">Dataset Info</span></div>
+    <pre style="font-size:11px;color:var(--text2);overflow-x:auto;line-height:1.7">${JSON.stringify(info,null,2)}</pre>
+    <div style="margin-top:12px;font-size:12px;color:var(--text2)">
+      Log: ${(ds.log||[]).map(l=>`<span style="color:var(--text)">[${l.level}] ${l.msg}</span>`).join(' · ')}
+    </div>
+  </div>`;
+}
+
+// ─── Normlog ──────────────────────────────────────────────
+function renderNormLog(ds) {
+  const warns = (ds.log||[]).filter(l=>l.level==='warning');
+  return `<div class="normlog" style="border-color:${warns.length?'var(--amber)':'var(--border)'}">
+    <div class="normlog-hdr" data-action="toggle-normlog">
+      <span>📋 <b style="color:var(--text)">Normalization Log</b> — ${ds.metadata?.recordCount} records · ${ds.metadata?.customerCount} customers · schema v${ds.metadata?.schemaVersion}</span>
+      <span>${warns.length?`⚠ ${warns.length} warning${warns.length!==1?'s':''}`:''}</span>
+      <span>${state.normlogOpen?'▲':'▼'}</span>
+    </div>
+    ${state.normlogOpen?`<div class="normlog-body">${(ds.log||[]).map(l=>
+      `<div style="color:${l.level==='warning'?'var(--amber)':l.level==='error'?'var(--red)':'var(--text2)'}">[${l.level}] ${l.msg}</div>`
+    ).join('')}</div>`:''}
+  </div>`;
+}
+
+// ─── AM Drill ─────────────────────────────────────────────
+function renderAMDrill(allRecs) {
+  const am = state.drillDown.am;
+  const amRecs = allRecs.filter(r=>r.accountManager===am);
+  const ytdS = getTotalSales(amRecs), ytdB = getTotalBudget(amRecs);
+  const pct = safePct(ytdS,ytdB);
+  const trend = getMonthlyTrend(amRecs);
+  const custs = getCustomers(amRecs).filter(c=>!c.isGeneralBucket);
+
+  const custRows = custs.map((c,i)=>`
+    <tr>
+      <td style="text-align:center;color:var(--text2);font-size:11px">${i+1}</td>
+      <td><span class="td-link" data-action="drill-customer:${encodeURIComponent(c.customerKey)}:${encodeURIComponent(c.customer)}">${c.customer}</span></td>
+      <td class="right" style="color:var(--gold);font-weight:600">${fmtC(c.sales,true)}</td>
+      <td class="right" style="font-weight:700;color:${pctColor(c.pct)}">
+        ${fmtP(c.pct)}
+        <div class="pbar"><div class="pbar-fill" style="width:${Math.min(c.pct||0,100)}%;background:${pctColor(c.pct)}"></div></div>
+      </td>
+    </tr>`).join('');
+
+  return `
+    <div class="drill-header">
+      <button class="back-btn" data-action="drill-back">← Back</button>
+      <div>
+        <div class="drill-title">${am}</div>
+        <div class="drill-sub">Account Manager · YTD breakdown</div>
+      </div>
+    </div>
+    <div class="kpi-row">
+      ${kpiCard('YTD Sales',fmtC(ytdS,true),`of ${fmtC(ytdB,true)} budget`,'var(--gold)')}
+      ${kpiCard('% to Budget',fmtP(pct),'year-to-date',pctColor(pct))}
+      ${kpiCard('Customers',custs.length,'active accounts','var(--blue)')}
+    </div>
+    ${trend.length?`<div class="panel"><div class="shead"><span class="shead-title">Monthly Sales vs Budget</span></div>
+      <div class="chart-wrap">${svgBarChart(trend,700,180)}</div></div>`:''}
+    <div class="panel" style="padding:0;overflow:hidden">
+      <div style="padding:12px 16px 0"><div class="shead">
+        <span class="shead-title">Customers (${custs.length})</span>
+        <span class="shead-right">Click name to drill down</span>
+      </div></div>
+      <div class="tbl-wrap" style="border-radius:0;border:none;border-top:1px solid var(--border)">
+        <table><thead><tr>
+          <th style="width:32px">#</th><th>Customer</th>
+          <th class="right">YTD Sales</th><th class="right" style="min-width:100px">% to Budget</th>
+        </tr></thead><tbody>${custRows}</tbody></table>
+      </div>
+    </div>`;
+}
+
+// ─── Customer Drill ───────────────────────────────────────
+function renderCustomerDrill(allRecs) {
+  const {customerKey, customerName, am} = state.drillDown;
+  const cRecs = allRecs.filter(r=>r.customerKey===customerKey);
+  const ytdS = getTotalSales(cRecs), ytdB = getTotalBudget(cRecs);
+  const pct = safePct(ytdS,ytdB);
+  const gap = ytdB-ytdS;
+  const trend = getMonthlyTrend(cRecs);
+
+  const monthRows = trend.filter(m=>m.sales>0||m.budget>0).map(m=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border2)">
+      <div style="width:50px;font-size:11px;color:var(--text2);font-weight:500">${m.label}</div>
+      <div style="flex:1;height:4px;background:var(--empty);border-radius:2px">
+        <div style="height:100%;border-radius:2px;width:${m.budget>0?Math.min(m.sales/m.budget*100,120):0}%;max-width:100%;background:${pctColor(m.budget>0?safePct(m.sales,m.budget):null)}"></div>
+      </div>
+      <div style="width:70px;text-align:right;font-size:12px;color:var(--gold);font-weight:600">${fmtC(m.sales,true)}</div>
+      <div style="width:55px;text-align:right;font-size:11px;font-weight:600;color:${pctColor(m.budget>0?safePct(m.sales,m.budget):null)}">${m.budget>0?fmtP(safePct(m.sales,m.budget)):'—'}</div>
+    </div>`).join('');
+
+  return `
+    <div class="drill-header">
+      <button class="back-btn" data-action="drill-back-customer">← ${am}</button>
+      <div>
+        <div class="drill-title">${customerName}</div>
+        <div class="drill-sub">Customer · managed by ${am}</div>
+      </div>
+    </div>
+    <div class="kpi-row">
+      ${kpiCard('YTD Sales',fmtC(ytdS,true),`of ${fmtC(ytdB,true)} budget`,'var(--gold)')}
+      ${kpiCard('% to Budget',fmtP(pct),'year-to-date',pctColor(pct))}
+      ${kpiCard('Gap',fmtC(Math.abs(gap),true),ytdB>ytdS?'behind budget':'over budget',ytdB>ytdS?'var(--red)':'var(--green)')}
+    </div>
+    <div class="panel"><div class="shead"><span class="shead-title">Monthly Sales vs Budget</span></div>
+      ${trend.length?`<div class="chart-wrap">${svgBarChart(trend,700,180)}</div><div style="margin-top:12px">${monthRows}</div>`:'<div style="color:var(--text2);font-size:13px">No monthly data.</div>'}
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// MAIN RENDER
+// ═══════════════════════════════════════════════════════════
+function render() {
+  document.body.className = state.isDark ? 'dark' : '';
+  const app = document.getElementById('app');
+  if (!state.auth)                  { app.innerHTML = renderAuth(); focusAuthInput(); return; }
+  if (state.screen==='home')        { app.innerHTML = renderHome(); return; }
+  if (state.screen==='sales-hub')   { app.innerHTML = renderSalesHub(); return; }
+  if (state.screen==='placeholder') { app.innerHTML = renderPlaceholder(state._placeholderId||''); return; }
+  if (state.screen==='dashboard')   { app.innerHTML = renderDashboard(); return; }
+}
+
+function focusAuthInput() {
+  setTimeout(()=>{ const el=document.getElementById('auth-pw'); if(el)el.focus(); },50);
+}
+
+// ═══════════════════════════════════════════════════════════
+// EVENT HANDLING
+// ═══════════════════════════════════════════════════════════
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-action]');
+  if (!el) { if(state.aiOpen){setState({aiOpen:false});} return; }
+  const [action,...args] = el.dataset.action.split(':');
+  const arg = args.join(':');
+
+  if (action==='auth-submit') { doAuth(); return; }
+  if (action==='auth-show-admin') { state.authMode='admin'; state.authError=false; render(); focusAuthInput(); return; }
+  if (action==='auth-cancel-admin') { state.authMode='viewer'; state.authError=false; render(); focusAuthInput(); return; }
+  if (action==='toggle-dark') { setState({isDark:!state.isDark}); return; }
+  if (action==='sign-out') { setState({auth:null,screen:'home',authMode:'viewer',authError:false}); return; }
+  if (action==='go-home') { setState({screen:'home'}); return; }
+  if (action==='go-sales-hub') { setState({screen:'sales-hub',drillDown:null}); return; }
+  if (action==='go-dashboard') { setState({screen:'dashboard',tab:'summary',drillDown:null}); return; }
+  if (action==='go-placeholder') { state._placeholderId=arg; setState({screen:'placeholder'}); return; }
+  if (action==='set-tab') {
+    setState({tab:arg,drillDown:null,_amSortCol:null,_custSortCol:null,_custSearch:'',_xlSearch:''});
+    return;
+  }
+  if (action==='drill-am') { setState({drillDown:{level:'am',am:arg},tab:'am'}); return; }
+  if (action==='drill-customer') {
+    const [key,name] = arg.split(':').map(decodeURIComponent);
+    setState({drillDown:{level:'customer',am:state.drillDown?.am||'',customerKey:key,customerName:name}});
+    return;
+  }
+  if (action==='drill-back') { setState({drillDown:null}); return; }
+  if (action==='drill-back-customer') { setState({drillDown:{level:'am',am:state.drillDown?.am||''}}); return; }
+  if (action==='sort-am') {
+    const dir = state._amSortCol===arg&&state._amSortDir==='desc'?'asc':'desc';
+    state._amSortCol=arg; state._amSortDir=dir; renderDashContent(); return;
+  }
+  if (action==='sort-cust') {
+    const dir = state._custSortCol===arg&&state._custSortDir==='desc'?'asc':'desc';
+    state._custSortCol=arg; state._custSortDir=dir; renderDashContent(); return;
+  }
+  if (action==='toggle-general') { state.showGeneral=!state.showGeneral; renderDashContent(); return; }
+  if (action==='toggle-normlog') { state.normlogOpen=!state.normlogOpen; renderDashContent(); return; }
+  if (action==='clear-am-filter') { setState({amFilter:''}); return; }
+  if (action==='queue-clear') { state.uploadQueue=state.uploadQueue.filter(f=>f.state==='processing'); renderDashContent(); return; }
+  if (action==='select-ds') {
+    state.activeId=arg; state.drillDown=null; state.amFilter=''; state.tab='summary';
+    try{sessionStorage.setItem('tii_activeId',arg);}catch{}
+    setState({datasets:storageList()}); return;
+  }
+  if (action==='delete-ds') { e.stopPropagation(); state.deleteConfirm=arg; renderDashContent(); return; }
+  if (action==='cancel-delete') { state.deleteConfirm=null; renderDashContent(); return; }
+  if (action==='confirm-delete') {
+    storageDelete(arg);
+    if(state.activeId===arg){state.activeId=storageLatestId();}
+    state.deleteConfirm=null;
+    setState({datasets:storageList()}); return;
+  }
+  if (action==='delete-all-datasets') {
+    if(confirm('Delete all datasets? This cannot be undone.')) {
+      storageDeleteAll(); state.activeId=null; state.drillDown=null;
+      setState({datasets:storageList()}); return;
+    }
+  }
+  if (action==='ai-ask') { doAIAsk(); return; }
+  if (action==='ai-clear') { setState({aiHistory:[],aiOpen:false}); return; }
+  if (action==='go-placeholder') { state._placeholderId=arg; setState({screen:'placeholder'}); return; }
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key==='Enter') {
+    const el = e.target;
+    if (el.dataset.actionKeyenter) {
+      const action = el.dataset.actionKeyenter;
+      if (action==='auth-submit') { doAuth(); }
+      if (action==='ai-ask') { doAIAsk(); }
+    }
+    if (el.id==='auth-pw') { doAuth(); }
+  }
+  if (e.key==='Escape') { setState({aiOpen:false}); }
+});
+
+document.addEventListener('input', e => {
+  const el = e.target;
+  if (el.id==='cust-search') { state._custSearch=el.value; renderDashContent(); }
+  if (el.id==='xl-search') { state._xlSearch=el.value; renderDashContent(); }
+  if (el.id==='ai-input') { /* handled inline */ }
+  if (el.id==='upload-type') {
+    const wf = document.getElementById('week-field');
+    if(wf) wf.style.display = el.value==='weekly'?'':'none';
+  }
+});
+
+document.addEventListener('change', e => {
+  const el = e.target;
+  // File upload — delegated so it always works regardless of innerHTML re-renders
+  if (el.type === 'file' && el.id === 'tii-file-input') {
+    if (el.files && el.files.length) handleFiles(el.files);
+    return;
+  }
+  if (el.dataset.action==='set-dataset') {
+    state.activeId=el.value; state.drillDown=null; state.amFilter=''; state.tab='summary';
+    try{sessionStorage.setItem('tii_activeId',el.value);}catch{}
+    renderDashContent(); return;
+  }
+  if (el.dataset.action==='set-am-filter') { setState({amFilter:el.value}); return; }
+  if (el.dataset.action==='toggle-general') { state.showGeneral=el.checked; renderDashContent(); return; }
+});
+
+function renderDashContent() {
+  const el = document.getElementById('dash-content');
+  if (!el) { render(); return; }
+  const ds = activeDataset();
+  const recs = activeRecords();
+  const allRecs = ds?.analysisRecords||[];
+  const datasets = storageList();
+  el.innerHTML = renderTabContent(recs, ds, allRecs, datasets);
+  // Re-attach filter banner in tab strip
+  const filterEl = document.querySelector('.tab-am-filter select');
+  if (filterEl) filterEl.value = state.amFilter;
+}
+
+// ─── Auth ─────────────────────────────────────────────────
+function doAuth() {
+  const pw = (document.getElementById('auth-pw')||{}).value||'';
+  const expected = state.authMode==='admin'
+    ? AUTH_CONFIG.passwords.admin
+    : AUTH_CONFIG.passwords.viewer;
+  if (pw===expected) {
+    const auth = state.authMode;
+    try{sessionStorage.setItem('tii_auth',auth);}catch{}
+    const saved = (() => { try { const s=sessionStorage.getItem('tii_activeId'); return s&&storageGet(s)?s:storageLatestId(); } catch { return storageLatestId(); } })();
+    setState({auth, screen:'home', authError:false, datasets:storageList(), activeId:saved||state.activeId});
+  } else {
+    state.authError=true; render();
+    setTimeout(()=>{ const el=document.getElementById('auth-pw'); if(el){el.value='';el.focus();} state.authError=false; setTimeout(render,1800); },50);
+  }
+}
+
+// ─── Upload events — delegated at document level, always active ───
+// Drag-and-drop on dropzone
+document.addEventListener('dragover', e => {
+  const dz = document.getElementById('dropzone');
+  if (dz && dz.contains(e.target)) { e.preventDefault(); dz.classList.add('drag'); }
+});
+document.addEventListener('dragleave', e => {
+  const dz = document.getElementById('dropzone');
+  if (dz && !dz.contains(e.relatedTarget)) dz.classList.remove('drag');
+});
+document.addEventListener('drop', e => {
+  const dz = document.getElementById('dropzone');
+  if (dz && dz.contains(e.target)) {
+    e.preventDefault(); dz.classList.remove('drag');
+    if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
+  }
+});
+function attachUploadEvents() {} // kept as no-op for any remaining calls
+
+async function handleFiles(fileList) {
+  const files = [...fileList].filter(f=>/\.xlsx?$/i.test(f.name));
+  if (!files.length) return;
+  const items = files.map(f=>{
+    const detected = parseMonthFromFilename(f.name);
+    return {name:f.name,size:f.size,state:'pending',file:f,detectedMonth:detected};
+  });
+  state.uploadQueue = [...state.uploadQueue.filter(f=>!items.find(n=>n.name===f.name)), ...items];
+  state.uploadRunning = true;
+  renderDashContent();
+  const typeEl = document.getElementById('upload-type');
+  const weekEl = document.getElementById('upload-week');
+  const monthEl = document.getElementById('upload-month');
+  const dataType = typeEl?.value||'final';
+  const week = parseInt(weekEl?.value||'1');
+  const fallbackMonth = monthEl?.value?.trim()||'';
+  for (const item of items) {
+    const idx = state.uploadQueue.findIndex(f=>f.name===item.name);
+    if (idx>=0) state.uploadQueue[idx].state='processing';
+    renderDashContent();
+    try {
+      const buf = await item.file.arrayBuffer();
+      const effectiveMonth = item.detectedMonth || fallbackMonth || new Date().toISOString().slice(0,7);
+      const result = await parseXLSX(buf, effectiveMonth);
+      const env = storageStore(result, dataType, dataType==='weekly'?week:null);
+      if (idx>=0) { state.uploadQueue[idx].state='ok'; state.uploadQueue[idx].msg=`${result.metadata.customerCount} customers · ${fmtMonth(effectiveMonth)}`; }
+      state.activeId = env.id;
+      try{sessionStorage.setItem('tii_activeId',env.id);}catch{}
+      state.datasets = storageList();
+    } catch(err) {
+      if (idx>=0) { state.uploadQueue[idx].state='error'; state.uploadQueue[idx].msg=err.message; }
+    }
+    renderDashContent();
+  }
+  state.uploadRunning = false;
+  renderDashContent();
+  const fi2=document.getElementById('tii-file-input'); if(fi2)fi2.value='';
+}
+
+// ─── AI ───────────────────────────────────────────────────
+async function doAIAsk() {
+  const input = document.getElementById('ai-input');
+  if (!input) return;
+  const q = input.value.trim();
+  if (!q) return;
+  const ds = activeDataset();
+  if (!ds) { alert('Load a dataset first.'); return; }
+  input.value = '';
+  input.disabled = true;
+  const recs = ds.analysisRecords||[];
+  const context = {
+    summary:{totalSales:getTotalSales(recs),totalBudget:getTotalBudget(recs),pct:safePct(getTotalSales(recs),getTotalBudget(recs))},
+    am:getAMs(recs),
+    pace:computePace(recs),
+  };
+  const systemPrompt = `You are a sales analyst for Total Image Group (TIG).
+Answer questions about the sales data. Plain prose only. No markdown, no asterisks. Max 3 sentences. Be direct and specific with numbers.
+Data: ${JSON.stringify(context)}`;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:200,system:systemPrompt,
+        messages:[...state.aiHistory.map(h=>h.msgs).flat(),{role:'user',content:q}]})
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    const ans = (data.content?.[0]?.text||'No response').replace(/\*\*(.+?)\*\*/g,'$1').trim();
+    state.aiHistory = [...state.aiHistory,{q,a:ans,msgs:[{role:'user',content:q},{role:'assistant',content:ans}]}];
+  } catch(err) {
+    state.aiHistory = [...state.aiHistory,{q,a:`Could not connect to AI: ${err.message}`,msgs:[]}];
+  }
+  input.disabled = false;
+  input.focus();
+  state.aiOpen = true;
+  render();
+}
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+(function init() {
+  // Restore session
+  try {
+    const auth = sessionStorage.getItem('tii_auth');
+    if (auth==='admin'||auth==='viewer') {
+      state.auth = auth;
+      state.datasets = storageList();
+      const saved = sessionStorage.getItem('tii_activeId');
+      state.activeId = (saved && storageGet(saved)) ? saved : storageLatestId();
+    }
+  } catch {}
+  // Dark mode preference
+  try {
+    if (localStorage.getItem('tii_dark')==='1') state.isDark=true;
+  } catch {}
+  document.addEventListener('click', e => {
+    if (e.target.dataset.action==='toggle-dark') {
+      try{localStorage.setItem('tii_dark',state.isDark?'1':'0');}catch{}
+    }
+  });
+  render();
+})();
+</script>
+</body>
+</html>
