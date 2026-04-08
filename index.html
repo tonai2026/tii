@@ -483,13 +483,26 @@ function activeMD() {
 function getYTDTotals() {
   const md = activeMD();
   if (!md || !md.totalsActualRow || !md.monthCols) return null;
-  let ytdActual = 0, ytdBudget = 0, annualBudget = 0;
-  for (const [ciStr, _mk] of Object.entries(md.monthCols)) {
+
+  // YTD actual — always from Total All Sales Actual row
+  let ytdActual = 0;
+  const elapsedCols = [];
+  for (const [ciStr] of Object.entries(md.monthCols)) {
     const ci = parseInt(ciStr);
-    const actual = typeof md.totalsActualRow[ci]==='number' ? md.totalsActualRow[ci] : 0;
-    const budget = md.totalsBudgetRow && typeof md.totalsBudgetRow[ci]==='number' ? md.totalsBudgetRow[ci] : 0;
-    annualBudget += budget;
-    if (actual > 0) { ytdActual += actual; ytdBudget += budget; }
+    const a  = typeof md.totalsActualRow[ci]==='number' ? md.totalsActualRow[ci] : 0;
+    if (a > 0) { ytdActual += a; elapsedCols.push(ci); }
+  }
+
+  // YTD + annual budget — only if Total All Sales Budget row exists
+  // If missing (later-format files) return null for budget so caller falls back
+  if (!md.totalsBudgetRow) return { ytdActual, ytdBudget: null, annualBudget: null };
+
+  let ytdBudget = 0, annualBudget = 0;
+  for (const [ciStr] of Object.entries(md.monthCols)) {
+    const ci = parseInt(ciStr);
+    const b  = typeof md.totalsBudgetRow[ci]==='number' ? md.totalsBudgetRow[ci] : 0;
+    annualBudget += b;
+    if (elapsedCols.includes(ci)) ytdBudget += b;
   }
   return { ytdActual, ytdBudget, annualBudget };
 }
@@ -1281,20 +1294,29 @@ function renderTabContent(recs, _ds, allRecs, _datasets) {
 
 // ─── Summary ──────────────────────────────────────────────
 function renderSummary(recs) {
-  // Use "Total All Sales" row for accurate KPIs — avoids summing issues
-  const ytd = getYTDTotals();
-  const ts   = ytd ? ytd.ytdActual  : getTotalSales(recs);
-  const ytdB = ytd ? ytd.ytdBudget  : 0;
-  const annB = ytd ? ytd.annualBudget: getTotalBudget(recs);
-  const pct  = safePct(ts, ytdB||annB);
-  const gap  = (ytdB||annB) - ts;
+  // KPIs: actual from Total All Sales row; budget from same row OR
+  // computePace (correctly sums elapsed months from individual records)
+  const ytd  = getYTDTotals();
+  const pace = computePace(recs);
+  const ts   = ytd?.ytdActual ?? getTotalSales(recs);
+
+  // YTD budget: prefer totals row; fall back to computePace.cumBudget
+  const ytdB = (ytd?.ytdBudget  != null) ? ytd.ytdBudget
+             : (pace?.cumBudget ?? 0);
+  // Annual budget: prefer totals row; fall back to sum of all records
+  const annB = (ytd?.annualBudget != null) ? ytd.annualBudget
+             : getTotalBudget(recs);
+
+  const pct = safePct(ts, ytdB || annB);
+  const gap = (ytdB || annB) - ts;
+  const budgetLabel = ytdB ? 'elapsed months budget' : 'annual budget';
 
   const trend = getMonthlyTrend(recs);
   const top   = getCustomers(recs).slice(0,10);
 
   const kpis = `<div class="kpi-row">
     ${kpiCard('YTD Sales',fmtC(ts,true),`${new Set(recs.map(r=>r.customerKey)).size} customers`,'var(--gold)')}
-    ${kpiCard('YTD Budget',fmtC(ytdB||annB,true),ytdB?'elapsed months budget':'annual budget','var(--text2)')}
+    ${kpiCard('YTD Budget',fmtC(ytdB||annB,true),budgetLabel,'var(--text2)')}
     ${kpiCard('% to Budget',fmtP(pct),'YTD achievement',pctColor(pct))}
     ${kpiCard('Gap',fmtC(Math.abs(gap),true),gap>0?'behind target':'ahead of target',gap>0?'var(--red)':'var(--green)')}
   </div>`;
