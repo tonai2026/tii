@@ -1154,7 +1154,7 @@ function renderDashboard() {
 
   // AI bar
   const aiHtml = `
-  <div class="ai-input-wrap">
+  <div class="ai-input-wrap" style="display:none">
     <span class="ai-icon">🤖</span>
     <input class="ai-input" id="ai-input" placeholder="Ask anything about sales, customers, budgets…"
       data-action-keyenter="ai-ask" ${!hasDs?'disabled title="Loading data…"':''}>
@@ -1360,7 +1360,7 @@ function renderAMTab(allRecs) {
     : getAMs(allRecs);
 
   const totS = sortedRows.reduce((s,r)=>s+r.sales,0);
-  const totB = sortedRows.reduce((s,r)=>s+r.budget,0);
+  const totB = computePace(allRecs)?.cumBudget || sortedRows.reduce((s,r)=>s+r.budget,0);
   const sortIndicator = (col) => {
     if (state._amSortCol!==col) return '<span style="opacity:.25">↕</span>';
     return state._amSortDir==='asc'?'↑':'↓';
@@ -1416,7 +1416,7 @@ function renderCustomers(recs) {
     : custs;
 
   const totS = sorted.reduce((s,c)=>s+(c.sales||0),0);
-  const totB = sorted.reduce((s,c)=>s+(c.budget||0),0);
+  const totB = computePace(recs)?.cumBudget || sorted.reduce((s,c)=>s+(c.budget||0),0);
   const totGap = totB-totS;
   const totPct = safePct(totS,totB);
 
