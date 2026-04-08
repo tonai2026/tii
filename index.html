@@ -382,7 +382,7 @@ const state = {
   isDark: false,
   // Data — loaded from /data/ folder, never localStorage
   monthData: [],         // [{monthKey:'2025-08', label:'August 2025', records:[...]}]
-  selectedMonth: 'all', // 'all' | 'YYYY-MM'
+  selectedMonth: '', // set to latest monthKey on load
   loadState: 'idle',    // 'idle' | 'loading' | 'ready' | 'error'
   loadError: '',
   // UI state
@@ -424,22 +424,19 @@ function monthLabel(mk) {
 // All records for currently selected month (or all months combined)
 function activeRecords() {
   if (!state.monthData.length) return [];
-  let recs;
-  if (state.selectedMonth === 'all') {
-    recs = state.monthData.flatMap(m => m.records);
-  } else {
-    const md = state.monthData.find(m => m.monthKey === state.selectedMonth);
-    recs = md ? md.records : [];
-  }
+  // Each file is a full-year EOM snapshot — use only the selected one
+  const md = state.monthData.find(m => m.monthKey === state.selectedMonth)
+          || state.monthData[state.monthData.length - 1];
+  let recs = md ? md.records : [];
   if (state.amFilter) recs = recs.filter(r => r.accountManager === state.amFilter);
   return recs;
 }
 
-// All records for drilldowns (ignore amFilter, respect selectedMonth)
+// All records for drilldowns (ignore amFilter, use selected snapshot)
 function allActiveRecords() {
   if (!state.monthData.length) return [];
-  if (state.selectedMonth === 'all') return state.monthData.flatMap(m => m.records);
-  const md = state.monthData.find(m => m.monthKey === state.selectedMonth);
+  const md = state.monthData.find(m => m.monthKey === state.selectedMonth)
+          || state.monthData[state.monthData.length - 1];
   return md ? md.records : [];
 }
 
@@ -1081,13 +1078,10 @@ function renderDashboard() {
     </button>`;
   }).join('');
 
-  // Month selector options — All Months + each loaded month, newest first in display but sorted oldest→newest in array
-  const monthOpts = [
-    `<option value="all" ${state.selectedMonth==='all'?'selected':''}>All Months</option>`,
-    ...[...state.monthData].reverse().map(m =>
-      `<option value="${m.monthKey}" ${m.monthKey===state.selectedMonth?'selected':''}>${m.label}</option>`
-    )
-  ].join('');
+  // Month selector — each entry is a full EOM snapshot, newest first
+  const monthOpts = [...state.monthData].reverse().map(m =>
+    `<option value="${m.monthKey}" ${m.monthKey===state.selectedMonth?'selected':''}>${m.label} EOM</option>`
+  ).join('');
 
   const amOpts = `<option value="">All AMs</option>${ams.map(a=>`<option value="${a}" ${a===state.amFilter?'selected':''}>${a}</option>`).join('')}`;
 
@@ -1141,7 +1135,7 @@ function renderDashboard() {
   </div>
   <div class="dash-footer">
     <span><b style="color:var(--gold)">TII</b> · Sales Dashboard</span>
-    <span>${hasDs?`${allRecs.length} records · ${new Set(allRecs.map(r=>r.customerKey)).size} customers · ${state.selectedMonth==='all'?'All Months':monthLabel(state.selectedMonth)}`:'Loading…'}</span>
+    <span>${hasDs?`${allRecs.length} records · ${new Set(allRecs.map(r=>r.customerKey)).size} customers · ${monthLabel(state.selectedMonth) + ' EOM'}`:'Loading…'}</span>
   </div>
 </div>`;
 }
