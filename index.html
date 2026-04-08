@@ -451,8 +451,8 @@ async function loadFromDataFolder() {
   setState({ loadState: 'loading' });
   try {
     // 1. Fetch the file manifest
-    const res = await fetch('/data/files.json');
-    if (!res.ok) throw new Error('Could not load /data/files.json — make sure it exists');
+    const res = await fetch('./data/files.json');
+    if (!res.ok) throw new Error('Could not load ./data/files.json — check it exists in your repo');
     const filenames = await res.json(); // ["2025-07 - July EOM.xlsx", ...]
 
     // 2. Parse each file
@@ -461,7 +461,7 @@ async function loadFromDataFolder() {
       const mk = monthKeyFromFilename(name);
       if (!mk) { console.warn('Skipping — bad filename:', name); continue; }
       try {
-        const buf = await (await fetch(`/data/${encodeURIComponent(name)}`)).arrayBuffer();
+        const buf = await (await fetch('./data/' + encodeURIComponent(name))).arrayBuffer();
         const parsed = await parseXLSX(buf, mk);
         results.push({ monthKey: mk, label: monthLabel(mk), records: parsed.analysisRecords });
       } catch(e) { console.warn('Failed to load', name, e.message); }
@@ -906,7 +906,7 @@ function renderLoadError() {
     <div style="font-size:13px;color:var(--text2);max-width:340px;line-height:1.6">${state.loadError}</div>
     <div style="font-size:12px;color:var(--text2);max-width:340px;line-height:1.6;
       background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px">
-      Make sure <b style="color:var(--text)">/data/files.json</b> exists in your GitHub repo
+      Make sure <b style='color:var(--text)'>./data/files.json</b> exists in your repo
       and lists your Excel files.<br><br>
       Example:<br>
       <code style="color:var(--gold)">["2025-07 - July EOM.xlsx","2025-08 - August EOM.xlsx"]</code>
@@ -1729,7 +1729,7 @@ document.addEventListener('change', e => {
   if (el.type === 'file' && el.id === 'fileUpload') { /* upload removed */ return; }
   if (el.dataset.action==='set-month') {
     state.selectedMonth=el.value; state.drillDown=null; state.amFilter='';
-    renderDashContent(); return;
+    render(); return;
   }
   if (el.dataset.action==='set-am-filter') { setState({amFilter:el.value}); return; }
   if (el.dataset.action==='toggle-general') { state.showGeneral=el.checked; renderDashContent(); return; }
