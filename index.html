@@ -293,24 +293,68 @@ const AUTH_CONFIG = {
 };
 
 const TIG_SCHEMA = {
-  version:'1.0',
+  version:'1.2',
   primarySheet:'25-26 Budget-Actual Invoiced',
-  headerRowIndex:1,
-  dataStartRow:2,
   actualRowMarker:'Actual',
   budgetRowMarker:'Budget',
-  typeDiscriminatorCol:3,
-  accountManagerCol:0,
-  categoryCol:1,
-  customerCol:2,
-  monthColumns:{4:'2025-07',5:'2025-08',6:'2025-09',7:'2025-10',8:'2025-11',9:'2025-12',
-                10:'2026-01',11:'2026-02',12:'2026-03',13:'2026-04',14:'2026-05',15:'2026-06'},
-  ignoredCols:[16,17,18],
-  skipCol3Values:new Set(['New','Budget-','% of Budget','$ Variance','% Variance','.']),
-  skipCol2Values:new Set(['Total']),
-  skipCol0Values:new Set(['Total All Sales']),
-  expectedPairs:104,
+  // Month header → YYYY-MM. Covers "Jul-25" and plain "Jul" variants.
+  monthHeaderMap: {
+    'jul-25':'2025-07','aug-25':'2025-08','sep-25':'2025-09','oct-25':'2025-10',
+    'nov-25':'2025-11','dec-25':'2025-12','jan-26':'2026-01','feb-26':'2026-02',
+    'mar-26':'2026-03','apr-26':'2026-04','may-26':'2026-05','jun-26':'2026-06',
+    'jul':'2025-07','aug':'2025-08','sep':'2025-09','oct':'2025-10',
+    'nov':'2025-11','dec':'2025-12','jan':'2026-01','feb':'2026-02',
+    'mar':'2026-03','apr':'2026-04','may':'2026-05','jun':'2026-06',
+  },
 };
+
+// ─── Layout detector — scan header row, no fallback ──────
+function detectLayout(rawRows) {
+  const S = TIG_SCHEMA;
+  let headerRowIdx = -1, typeCol = -1, amCol = 0, customerCol = -1;
+  const monthCols = {};
+
+  // Find header row by locating "customer" cell (first 15 rows)
+  for (let r = 0; r < Math.min(rawRows.length, 15); r++) {
+    const cells = (rawRows[r]||[]).map(c => String(c||'').toLowerCase().trim());
+    const ci = cells.findIndex(c => c.includes('customer'));
+    if (ci < 0) continue;
+    headerRowIdx = r;
+    customerCol  = ci;
+    amCol        = 0; // AM is always col 0
+
+    // Type col: find "actual" or "budget" in same header row
+    for (let c2 = 0; c2 < cells.length; c2++) {
+      if (cells[c2] === 'actual' || cells[c2] === 'budget') { typeCol = c2; break; }
+    }
+
+    // Month cols: match "jul-25" style or plain "jul" in header row
+    for (let c2 = 0; c2 < cells.length; c2++) {
+      const cell = cells[c2];
+      if (S.monthHeaderMap[cell]) { monthCols[c2] = S.monthHeaderMap[cell]; continue; }
+      // Partial match e.g. "jul 2025" starts with "jul"
+      for (const [pat, mk] of Object.entries(S.monthHeaderMap)) {
+        if (pat.length >= 3 && cell.startsWith(pat)) { monthCols[c2] = mk; break; }
+      }
+    }
+    break;
+  }
+
+  // If type col missing, scan first data rows for "Actual"/"Budget"
+  if (typeCol < 0 && headerRowIdx >= 0) {
+    outer: for (let r = headerRowIdx+1; r < Math.min(rawRows.length, headerRowIdx+8); r++) {
+      const row = rawRows[r]||[];
+      for (let c2 = 0; c2 < row.length; c2++) {
+        if (String(row[c2]||'').trim() === 'Actual') { typeCol = c2; break outer; }
+      }
+    }
+  }
+
+  if (headerRowIdx < 0) throw new Error('Header row not found — check file has "Customer Name" column');
+  if (Object.keys(monthCols).length === 0) throw new Error('No month columns found — check headers like "Jul-25"');
+
+  return { headerRowIdx, typeCol, amCol, customerCol, monthCols, dataStartRow: headerRowIdx+1 };
+}
 
 const MONTH_ABBR = ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const MONTH_NAMES_MAP = {january:'01',february:'02',march:'03',april:'04',may:'05',june:'06',
@@ -390,6 +434,29 @@ function allActiveRecords() {
 // Has data loaded?
 function hasData() { return state.monthData.length > 0; }
 
+// Current month dataset object (includes totals rows)
+function activeMD() {
+  return state.monthData.find(m => m.monthKey === state.selectedMonth)
+      || state.monthData[state.monthData.length - 1]
+      || null;
+}
+
+// YTD totals from "Total All Sales" row — correct across all file versions
+// Uses non-zero actual months only, matches budget to same months
+function getYTDTotals() {
+  const md = activeMD();
+  if (!md || !md.totalsActualRow || !md.monthCols) return null;
+  let ytdActual = 0, ytdBudget = 0, annualBudget = 0;
+  for (const [ciStr, _mk] of Object.entries(md.monthCols)) {
+    const ci = parseInt(ciStr);
+    const actual = typeof md.totalsActualRow[ci]==='number' ? md.totalsActualRow[ci] : 0;
+    const budget = md.totalsBudgetRow && typeof md.totalsBudgetRow[ci]==='number' ? md.totalsBudgetRow[ci] : 0;
+    annualBudget += budget;
+    if (actual > 0) { ytdActual += actual; ytdBudget += budget; }
+  }
+  return { ytdActual, ytdBudget, annualBudget };
+}
+
 // ─── Load all files from /data/ ──────────────────────────
 async function loadFromDataFolder() {
   setState({ loadState: 'loading' });
@@ -407,7 +474,15 @@ async function loadFromDataFolder() {
       try {
         const buf = await (await fetch('./data/' + encodeURIComponent(name))).arrayBuffer();
         const parsed = await parseXLSX(buf, mk);
-        results.push({ monthKey: mk, label: monthLabel(mk), records: parsed.analysisRecords });
+        results.push({
+          monthKey:         mk,
+          label:            monthLabel(mk),
+          filename:         name,
+          records:          parsed.analysisRecords,
+          totalsActualRow:  parsed.totalsActualRow,
+          totalsBudgetRow:  parsed.totalsBudgetRow,
+          monthCols:        parsed.monthCols,
+        });
       } catch(e) { console.warn('Failed to load', name, e.message); }
     }
 
@@ -570,63 +645,101 @@ async function parseXLSX(arrayBuffer, monthKey) {
 // NORMALIZER
 // ═══════════════════════════════════════════════════════════
 function normalizeRows(rawRows, monthKey) {
-  const S = TIG_SCHEMA;
+  const S   = TIG_SCHEMA;
   const log = [];
-  const monthKeys = Object.values(S.monthColumns);
   const analysisRecords = [];
+  let totalsActualRow = null; // "Total All Sales" Actual row
+  let totalsBudgetRow = null; // "Total All Sales" Budget row
 
-  const hdr = rawRows[S.headerRowIndex]||[];
-  let i = S.dataStartRow;
+  // Detect layout — throws if file structure unrecognised
+  let L;
+  try { L = detectLayout(rawRows); }
+  catch(e) { log.push({level:'error',msg:e.message}); return {analysisRecords:[],rawRows,totalsActualRow,totalsBudgetRow,monthCols:{},metadata:{monthKey,customerCount:0,recordCount:0,schemaVersion:TIG_SCHEMA.version},log}; }
+  log.push({level:'info', msg:`Layout detected: headerRow=${L.headerRowIdx} typeCol=${L.typeCol} months=${Object.keys(L.monthCols).length}`});
+
+  let i = L.dataStartRow;
   let pairs = 0;
+  const seenKeys = new Set();
 
   while (i < rawRows.length) {
     const rowA = rawRows[i];
     if (!rowA || rowA.length === 0) { i++; continue; }
-    const col3A = String(rowA[S.typeDiscriminatorCol]||'').trim();
-    const col0  = String(rowA[S.accountManagerCol]||'').trim().toUpperCase();
-    const col2  = String(rowA[S.customerCol]||'').trim();
-    if (!col3A || S.skipCol3Values.has(col3A) || S.skipCol2Values.has(col2) || S.skipCol0Values.has(col0)) { i++; continue; }
-    if (col3A !== S.actualRowMarker) { i++; continue; }
-    // Look for budget row (next row that is Budget or skip New)
+
+    const typeVal = String(rowA[L.typeCol]      || '').trim();
+    const amVal   = String(rowA[L.amCol]        || '').trim().toUpperCase();
+    const custVal = String(rowA[L.customerCol]  || '').trim();
+
+    // Only process Actual rows
+    if (typeVal !== S.actualRowMarker) { i++; continue; }
+
+    const custLower = custVal.toLowerCase();
+
+    // ── Capture "Total All Sales" rows separately ────────────
+    if (custLower.includes('total all sales') || amVal.toLowerCase().includes('total all sales')) {
+      totalsActualRow = rowA;
+      // Find the matching budget row
+      let j = i + 1;
+      while (j < rawRows.length) {
+        const cand = rawRows[j];
+        if (!cand || cand.length === 0) { j++; continue; }
+        if (String(cand[L.typeCol]||'').trim() === S.budgetRowMarker) { totalsBudgetRow = cand; break; }
+        if (String(cand[L.typeCol]||'').trim() === S.actualRowMarker) break;
+        j++;
+      }
+      i = j + 1;
+      continue;
+    }
+
+    // ── Exclusions — never a customer ───────────────────────
+    if (!custVal)                            { i++; continue; }
+    if (custLower.includes('total'))         { i++; continue; }
+    if (custLower.includes('grand'))         { i++; continue; }
+    if (custLower.includes('variance'))      { i++; continue; }
+    if (custLower.includes('% of'))          { i++; continue; }
+    if (/^\d+(\.\d+)?$/.test(custVal))      { i++; continue; } // pure numbers
+
+    // ── Find matching Budget row ─────────────────────────────
     let rowB = null;
-    let j = i+1;
+    let j = i + 1;
     while (j < rawRows.length) {
-      const candidate = rawRows[j];
-      if (!candidate || candidate.length===0) { j++; continue; }
-      const c3 = String(candidate[S.typeDiscriminatorCol]||'').trim();
-      if (c3 === S.budgetRowMarker) { rowB = candidate; break; }
-      if (c3 === S.actualRowMarker) break;
+      const cand = rawRows[j];
+      if (!cand || cand.length === 0) { j++; continue; }
+      const ct = String(cand[L.typeCol] || '').trim();
+      if (ct === S.budgetRowMarker) { rowB = cand; break; }
+      if (ct === S.actualRowMarker) break;
       j++;
     }
     if (!rowB) { i++; continue; }
 
-    const am = col0 || '(UNKNOWN)';
-    const customer = col2;
-    const isGeneral = col2.toLowerCase().startsWith('general') ||
-      String(rowA[S.categoryCol]||'').toLowerCase().includes('general');
-    const customerKey = isGeneral ? `${am}__GENERAL` : col2;
+    // ── Dedup ────────────────────────────────────────────────
+    const am = amVal || '(UNKNOWN)';
+    const isGeneral = custLower.startsWith('general') || custLower.includes('gen-');
+    const customerKey = isGeneral ? `${am}__GENERAL` : custVal;
+    const dedupeKey = `${am}::${customerKey}`;
+    if (seenKeys.has(dedupeKey)) { i = j + 1; continue; }
+    seenKeys.add(dedupeKey);
 
-    for (const [colIdx, month] of Object.entries(S.monthColumns)) {
-      const cidx = parseInt(colIdx);
-      const sales = typeof rowA[cidx]==='number' ? rowA[cidx] : null;
-      const budget = typeof rowB[cidx]==='number' ? rowB[cidx] : null;
+    // ── Build per-month records ──────────────────────────────
+    for (const [colIdxStr, month] of Object.entries(L.monthCols)) {
+      const cidx = parseInt(colIdxStr);
       analysisRecords.push({
-        accountManager:am, customer, customerKey,
-        isGeneralBucket:isGeneral,
-        date:month,
-        sales: sales||0,
-        budget: budget||0,
-        rawSales: sales,
-        rawBudget: budget,
+        accountManager: am, customer: custVal, customerKey,
+        isGeneralBucket: isGeneral, date: month,
+        sales:     typeof rowA[cidx]==='number' ? rowA[cidx] : 0,
+        budget:    typeof rowB[cidx]==='number' ? rowB[cidx] : 0,
+        rawSales:  typeof rowA[cidx]==='number' ? rowA[cidx] : null,
+        rawBudget: typeof rowB[cidx]==='number' ? rowB[cidx] : null,
       });
     }
     pairs++;
-    i = j+1;
+    i = j + 1;
   }
 
-  log.push({level:'info',msg:`${pairs} customer/AM pairs · ${analysisRecords.length} records`});
+  log.push({level: pairs===0?'warning':'info',
+    msg: pairs===0 ? 'No customer pairs found' : `${pairs} customers · ${analysisRecords.length} records`});
+
   return {
-    analysisRecords, rawRows,
+    analysisRecords, rawRows, totalsActualRow, totalsBudgetRow, monthCols: L.monthCols,
     metadata:{monthKey, customerCount:pairs, recordCount:analysisRecords.length, schemaVersion:TIG_SCHEMA.version},
     log
   };
@@ -1012,7 +1125,7 @@ function renderDashboard() {
 
   // Tab strip
   const VIEWER_TABS = [['summary','Summary'],['am','Account Managers'],['customers','Customers'],
-    ['budget','Budget Performance'],['pace','Pace & Forecast'],['notifications','Notifications'],['excel','Source File']];
+    ['budget','Budget Performance'],['pace','Pace & Forecast'],['notifications','Notifications']];
   const ADMIN_TABS  = [...VIEWER_TABS,['debug','Debug']];
   const tabs = state.auth==='admin' ? ADMIN_TABS : VIEWER_TABS;
   const showAMFilter = AM_FILTER_TABS.has(state.tab) && ams.length>0 && hasDs;
@@ -1037,6 +1150,15 @@ function renderDashboard() {
     ${state.monthData.length?`<div class="tab-report-select">
       <label>Month</label>
       <select data-action="set-month">${monthOpts}</select>
+      ${(()=>{const md=state.monthData.find(m=>m.monthKey===state.selectedMonth)||state.monthData[state.monthData.length-1];
+        return md?.filename
+          ? `<a href="./data/${encodeURIComponent(md.filename)}" download="${md.filename}" title="Download ${md.filename}"
+              style="display:inline-flex;align-items:center;padding:3px 7px;border:1px solid var(--border);
+                border-radius:5px;color:var(--text2);font-size:11px;text-decoration:none;background:var(--input)"
+              onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'"
+              onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text2)'">⬇</a>`
+          : '';
+      })()}
     </div>`:''}
     ${tabHtml}
     ${showAMFilter?`<div class="tab-am-filter">
@@ -1122,18 +1244,22 @@ function renderTabContent(recs, _ds, allRecs, _datasets) {
 
 // ─── Summary ──────────────────────────────────────────────
 function renderSummary(recs) {
-  const ts = getTotalSales(recs), tb = getTotalBudget(recs);
-  const pct = safePct(ts,tb);
-  const gap = tb-ts;
+  // Use "Total All Sales" row for accurate KPIs — avoids summing issues
+  const ytd = getYTDTotals();
+  const ts   = ytd ? ytd.ytdActual  : getTotalSales(recs);
+  const ytdB = ytd ? ytd.ytdBudget  : 0;
+  const annB = ytd ? ytd.annualBudget: getTotalBudget(recs);
+  const pct  = safePct(ts, ytdB||annB);
+  const gap  = (ytdB||annB) - ts;
+
   const trend = getMonthlyTrend(recs);
-  const top = getCustomers(recs).slice(0,10);
-  const ams = new Set(recs.map(r=>r.accountManager).filter(Boolean)).size;
+  const top   = getCustomers(recs).slice(0,10);
 
   const kpis = `<div class="kpi-row">
     ${kpiCard('YTD Sales',fmtC(ts,true),`${new Set(recs.map(r=>r.customerKey)).size} customers`,'var(--gold)')}
-    ${kpiCard('Total Budget',fmtC(tb,true),'annual target','var(--text2)')}
+    ${kpiCard('YTD Budget',fmtC(ytdB||annB,true),ytdB?'elapsed months budget':'annual budget','var(--text2)')}
     ${kpiCard('% to Budget',fmtP(pct),'YTD achievement',pctColor(pct))}
-    ${kpiCard('Gap',fmtC(Math.abs(gap),true),gap>0?'behind target':'over target',gap>0?'var(--red)':'var(--green)')}
+    ${kpiCard('Gap',fmtC(Math.abs(gap),true),gap>0?'behind target':'ahead of target',gap>0?'var(--red)':'var(--green)')}
   </div>`;
 
   const chart = trend.length ? `<div class="panel"><div class="shead"><span class="shead-title">Monthly Sales vs Budget</span></div>
