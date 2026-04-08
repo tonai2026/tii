@@ -279,8 +279,60 @@ svg.chart{display:block;overflow:visible}
 </head>
 <body>
 <div id="app"></div>
-<!-- Permanent file input — must stay in static DOM, never innerHTML -->
-<input type="file" id="tii-file-input" accept=".xlsx,.xls" multiple style="position:fixed;left:-9999px;top:-9999px;opacity:0;pointer-events:none">
+
+<!--
+  UPLOAD PANEL - static HTML, never touched by innerHTML.
+  position:fixed so it sits over the content area without needing to be
+  inside the dynamically-rendered shell. Shown/hidden via display only.
+-->
+<div id="up-panel" style="display:none;position:fixed;top:80px;left:0;right:0;bottom:0;
+  overflow-y:auto;z-index:30;background:var(--bg);padding:32px 20px">
+  <div style="max-width:580px;margin:0 auto;display:flex;flex-direction:column;gap:16px">
+
+    <!-- Config row -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div style="flex:1;min-width:140px;display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;color:var(--text2);font-weight:600">Fallback month</label>
+        <input id="up-month" placeholder="e.g. 2025-07 (leave blank to auto-detect)"
+          style="border:1px solid var(--input-bd);background:var(--input);color:var(--text);border-radius:6px;padding:7px 10px;font-size:13px;outline:none;width:100%;font-family:inherit">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;color:var(--text2);font-weight:600">Type</label>
+        <select id="up-type" style="border:1px solid var(--input-bd);background:var(--input);color:var(--text);border-radius:6px;padding:7px 10px;font-size:13px;outline:none;font-family:inherit">
+          <option value="final">Final (EOM locked)</option>
+          <option value="weekly">Weekly snapshot</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Dropzone — input overlays the visual div -->
+    <div style="position:relative">
+      <div id="up-dropzone" style="border:2px dashed var(--border);border-radius:12px;
+        padding:36px 24px;text-align:center;pointer-events:none;transition:border-color .2s,background .2s">
+        <div style="font-size:36px;margin-bottom:10px">📂</div>
+        <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:6px">
+          Click to select files — or drag &amp; drop here
+        </div>
+        <div style="font-size:12px;color:var(--text2)">
+          Multiple .xlsx files supported · month auto-detected from filename
+        </div>
+      </div>
+      <!--
+        THE FILE INPUT — static HTML, opacity:0 overlay, never innerHTML.
+        Position:absolute covers the entire dropzone. Clicking anywhere on
+        the dropzone clicks this input directly. No label, no JS click().
+      -->
+      <input type="file" id="fileUpload" accept=".xlsx,.xls" multiple
+        style="position:absolute;top:0;left:0;width:100%;height:100%;
+               opacity:0;cursor:pointer;z-index:5">
+    </div>
+
+    <!-- Dynamic: queue and data manager (innerHTML is fine here — no file input) -->
+    <div id="up-queue"></div>
+    <div id="up-dm"></div>
+
+  </div>
+</div>
 
 <script>
 'use strict';
@@ -1422,95 +1474,8 @@ function renderSourceFile(ds) {
 
 // ─── Upload ───────────────────────────────────────────────
 function renderUpload(datasets) {
-  const queueHtml = state.uploadQueue.length ? `
-    <div class="queue-wrap">
-      <div class="queue-header">
-        <span>${state.uploadRunning?'Processing…':`${state.uploadQueue.filter(f=>f.state==='ok').length}/${state.uploadQueue.length} complete`}</span>
-        ${!state.uploadRunning?`<button data-action="queue-clear" style="font-size:11px;color:var(--text2);background:transparent;border:none;cursor:pointer;text-decoration:underline">Clear done</button>`:''}
-      </div>
-      ${state.uploadQueue.map(f=>`
-        <div class="queue-item ${f.state}">
-          <div class="qi-status" style="color:${f.state==='ok'?'var(--green)':f.state==='error'?'var(--red)':f.state==='processing'?'var(--gold)':'var(--text2)'}">
-            ${f.state==='ok'?'✓':f.state==='error'?'✗':f.state==='processing'?'⋯':'·'}
-          </div>
-          <div style="flex:1;min-width:0">
-            <div class="qi-name">${f.name}</div>
-            ${f.detectedMonth?`<div class="qi-month">→ ${f.detectedMonth}</div>`:''}
-            ${f.msg?`<div class="${f.state==='error'?'qi-err':''}" style="${f.state!=='error'?'font-size:11px;color:var(--green)':''}">${f.msg}</div>`:''}
-          </div>
-          <div class="qi-size">${(f.size/1024).toFixed(0)} KB</div>
-        </div>`).join('')}
-    </div>` : '';
-
-  const dmGroups = (() => {
-    if (!datasets.length) return '<div style="font-size:13px;color:var(--text2);padding:16px;text-align:center">No datasets yet. Upload a file above.</div>';
-    const byMonth = {};
-    for (const d of datasets) {
-      if (!byMonth[d.monthKey]) byMonth[d.monthKey]=[];
-      byMonth[d.monthKey].push(d);
-    }
-    return Object.entries(byMonth).sort(([a],[b])=>b.localeCompare(a)).map(([month,items])=>`
-      <div class="dm-group">
-        <div class="dm-group-hdr">
-          <span class="dm-group-title">${fmtMonth(month)}</span>
-          <span class="dm-group-count">${items.length} file${items.length!==1?'s':''}</span>
-        </div>
-        ${items.map(d=>`
-          <div class="dm-row ${d.id===state.activeId?'active-ds':''}" data-action="select-ds:${d.id}">
-            <div class="dm-badge ${d.type==='final'?'':'weekly'}">${d.type==='final'?'Final':`W${d.week||'?'}`}</div>
-            <div style="flex:1;min-width:0">
-              <div class="dm-name">${d.metadata?.fileName||d.id}</div>
-              <div class="dm-meta">${d.metadata?.customerCount} customers · ${new Date(d.uploadedAt).toLocaleDateString('en-AU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>
-            </div>
-            ${d.id===state.activeId?'<div class="dm-active-dot">● active</div>':''}
-            ${state.deleteConfirm===d.id
-              ?`<button data-action="confirm-delete:${d.id}" style="padding:4px 10px;background:var(--red);border:none;border-radius:5px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px">Delete</button>
-                <button data-action="cancel-delete" style="padding:4px 8px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:11px;cursor:pointer">Cancel</button>`
-              :`<button class="dm-del" data-action="delete-ds:${d.id}" title="Delete">🗑</button>`}
-          </div>`).join('')}
-      </div>`).join('');
-  })();
-
-  return `
-    <div class="upload-area" style="margin:0 auto;max-width:600px;padding:32px 0">
-      <div style="margin-bottom:20px">
-        <div style="font-size:22px;font-weight:300;color:var(--text);margin-bottom:4px">Data Management</div>
-        <div style="font-size:12px;color:var(--text2)">Schema v${TIG_SCHEMA.version} · Auto-detects month from filename</div>
-      </div>
-      <div class="info-banner" style="margin-bottom:12px">
-        <b>Auto-detect on:</b> Month is read from filename (e.g. "August EOM 2025" → Aug 2025). Set fallback only if not in filename.
-      </div>
-      <div class="cfg-row" style="margin-bottom:12px">
-        <div class="cfg-field grow">
-          <label class="cfg-label">Fallback month <span style="font-weight:400">(if not in filename)</span></label>
-          <input id="upload-month" placeholder="e.g. 2025-07 (leave blank to auto-detect)">
-        </div>
-        <div class="cfg-field">
-          <label class="cfg-label">Type</label>
-          <select id="upload-type">
-            <option value="final">Final (EOM locked)</option>
-            <option value="weekly">Weekly snapshot</option>
-          </select>
-        </div>
-        <div class="cfg-field" id="week-field" style="display:none">
-          <label class="cfg-label">Week</label>
-          <select id="upload-week">${[1,2,3,4,5].map(w=>`<option value="${w}">Week ${w}</option>`).join('')}</select>
-        </div>
-      </div>
-      <label class="dropzone" id="dropzone" for="tii-file-input" style="cursor:pointer;display:block">
-        <div class="dropzone-icon">📂</div>
-        <div class="dropzone-text">Click to select files — or drag &amp; drop here</div>
-        <div class="dropzone-sub">Month auto-detected from filename · multiple .xlsx files accepted</div>
-      </label>
-      ${queueHtml}
-      <div style="margin-top:24px">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-          <span class="shead-title">Stored Datasets</span>
-          ${datasets.length?`<button class="delete-all-btn" data-action="delete-all-datasets">🗑 Delete all</button>`:''}
-        </div>
-        ${dmGroups}
-      </div>
-    </div>`;
+  // Upload UI is rendered by showUploadPanel() — the dropzone lives in static HTML
+  return '<div style="padding:16px;font-size:13px;color:var(--text2)">Loading upload panel…</div>';
 }
 
 // ─── Debug ────────────────────────────────────────────────
@@ -1637,7 +1602,7 @@ function render() {
   if (state.screen==='home')        { app.innerHTML = renderHome(); return; }
   if (state.screen==='sales-hub')   { app.innerHTML = renderSalesHub(); return; }
   if (state.screen==='placeholder') { app.innerHTML = renderPlaceholder(state._placeholderId||''); return; }
-  if (state.screen==='dashboard')   { app.innerHTML = renderDashboard(); return; }
+  if (state.screen==='dashboard')   { app.innerHTML = renderDashboard(); if(state.tab==='upload'&&state.auth==='admin'){showUploadPanel();}else{hideUploadPanel();} return; }
 }
 
 function focusAuthInput() {
@@ -1663,6 +1628,7 @@ document.addEventListener('click', e => {
   if (action==='go-dashboard') { setState({screen:'dashboard',tab:'summary',drillDown:null}); return; }
   if (action==='go-placeholder') { state._placeholderId=arg; setState({screen:'placeholder'}); return; }
   if (action==='set-tab') {
+    if (arg!=='upload') hideUploadPanel();
     setState({tab:arg,drillDown:null,_amSortCol:null,_custSortCol:null,_custSearch:'',_xlSearch:''});
     return;
   }
@@ -1685,7 +1651,7 @@ document.addEventListener('click', e => {
   if (action==='toggle-general') { state.showGeneral=!state.showGeneral; renderDashContent(); return; }
   if (action==='toggle-normlog') { state.normlogOpen=!state.normlogOpen; renderDashContent(); return; }
   if (action==='clear-am-filter') { setState({amFilter:''}); return; }
-  if (action==='queue-clear') { state.uploadQueue=state.uploadQueue.filter(f=>f.state==='processing'); renderDashContent(); return; }
+  if (action==='queue-clear') { state.uploadQueue=state.uploadQueue.filter(f=>f.state==='processing'); updateUploadPanel(); return; }
   if (action==='select-ds') {
     state.activeId=arg; state.drillDown=null; state.amFilter=''; state.tab='summary';
     try{sessionStorage.setItem('tii_activeId',arg);}catch{}
@@ -1737,7 +1703,8 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const el = e.target;
   // File upload — delegated so it always works regardless of innerHTML re-renders
-  if (el.type === 'file' && el.id === 'tii-file-input') {
+  if (el.type === 'file' && el.id === 'fileUpload') {
+    console.log('FILE SELECTED:', el.files?.length, 'files');
     if (el.files && el.files.length) handleFiles(el.files);
     return;
   }
@@ -1750,6 +1717,79 @@ document.addEventListener('change', e => {
   if (el.dataset.action==='toggle-general') { state.showGeneral=el.checked; renderDashContent(); return; }
 });
 
+// ─── Upload panel: show/hide the static fixed panel ───────────
+function showUploadPanel() {
+  const panel = document.getElementById('up-panel');
+  if (!panel) return;
+  panel.style.display = 'block';
+  updateUploadPanel();
+}
+function hideUploadPanel() {
+  const p = document.getElementById('up-panel');
+  if (p) p.style.display = 'none';
+}
+function updateUploadPanel() {
+  const datasets = storageList();
+  // Queue
+  const qEl = document.getElementById('up-queue');
+  if (qEl) qEl.innerHTML = renderQueueHtml();
+  // Data manager
+  const dmEl = document.getElementById('up-dm');
+  if (dmEl) dmEl.innerHTML = renderDMHtml(datasets);
+}
+function renderQueueHtml() {
+  if (!state.uploadQueue.length) return '';
+  const done = state.uploadQueue.filter(f=>f.state==='ok').length;
+  return '<div class="queue-wrap">' +
+    '<div class="queue-header"><span>' +
+    (state.uploadRunning ? 'Processing…' : done+'/'+state.uploadQueue.length+' complete') +
+    '</span>' +
+    (!state.uploadRunning ? '<button data-action="queue-clear" style="font-size:11px;color:var(--text2);background:transparent;border:none;cursor:pointer;text-decoration:underline">Clear done</button>' : '') +
+    '</span></div>' +
+    state.uploadQueue.map(f=>
+      '<div class="queue-item '+f.state+'">' +
+      '<div class="qi-status" style="color:'+
+        (f.state==='ok'?'var(--green)':f.state==='error'?'var(--red)':f.state==='processing'?'var(--gold)':'var(--text2)')+
+        '">'+
+        (f.state==='ok'?'✓':f.state==='error'?'✗':f.state==='processing'?'⋯':'·')+
+      '</div>' +
+      '<div style="flex:1;min-width:0"><div class="qi-name">'+f.name+'</div>' +
+      (f.detectedMonth ? '<div class="qi-month">→ '+f.detectedMonth+'</div>' : '')+
+      (f.msg ? '<div style="font-size:11px;color:'+( f.state==='error'?'var(--red)':'var(--green)')+'">'+f.msg+'</div>' : '')+
+      '</div>' +
+      '<div class="qi-size">'+(f.size/1024).toFixed(0)+' KB</div>' +
+      '</div>'
+    ).join('') +
+    '</div>';
+}
+function renderDMHtml(datasets) {
+  if (!datasets.length) return '<div style="font-size:13px;color:var(--text2);padding:16px;text-align:center">No datasets yet.</div>';
+  const byMonth = {};
+  for (const d of datasets) { if (!byMonth[d.monthKey]) byMonth[d.monthKey]=[]; byMonth[d.monthKey].push(d); }
+  let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
+    '<span class="shead-title">Stored Datasets</span>' +
+    '<button class="delete-all-btn" data-action="delete-all-datasets">🗑 Delete all</button>' +
+    '</div>';
+  html += Object.entries(byMonth).sort(([a],[b])=>b.localeCompare(a)).map(([month,items])=>
+    '<div class="dm-group">' +
+    '<div class="dm-group-hdr"><span class="dm-group-title">'+fmtMonth(month)+'</span><span class="dm-group-count">'+items.length+' file'+(items.length!==1?'s':'')+'</span></div>' +
+    items.map(d=>
+      '<div class="dm-row '+( d.id===state.activeId?'active-ds':'')+'" data-action="select-ds:'+d.id+'">' +
+      '<div class="dm-badge '+( d.type==='final'?'':'weekly')+'">'+( d.type==='final'?'Final':'W'+(d.week||'?'))+'</div>' +
+      '<div style="flex:1;min-width:0"><div class="dm-name">'+( d.metadata?.fileName||d.id)+'</div>' +
+      '<div class="dm-meta">'+d.metadata?.customerCount+' customers · '+new Date(d.uploadedAt).toLocaleDateString('en-AU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+'</div></div>' +
+      (d.id===state.activeId?'<div class="dm-active-dot">● active</div>':'')+
+      (state.deleteConfirm===d.id
+        ?'<button data-action="confirm-delete:'+d.id+'" style="padding:4px 10px;background:var(--red);border:none;border-radius:5px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px">Delete</button>' +
+          '<button data-action="cancel-delete" style="padding:4px 8px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:11px;cursor:pointer">Cancel</button>'
+        :'<button class="dm-del" data-action="delete-ds:'+d.id+'" title="Delete">🗑</button>')+
+      '</div>'
+    ).join('') +
+    '</div>'
+  ).join('');
+  return html;
+}
+
 function renderDashContent() {
   const el = document.getElementById('dash-content');
   if (!el) { render(); return; }
@@ -1757,7 +1797,13 @@ function renderDashContent() {
   const recs = activeRecords();
   const allRecs = ds?.analysisRecords||[];
   const datasets = storageList();
-  el.innerHTML = renderTabContent(recs, ds, allRecs, datasets);
+  if (state.tab === 'upload' && state.auth === 'admin') {
+    el.innerHTML = '';
+    showUploadPanel();
+  } else {
+    hideUploadPanel();
+    el.innerHTML = renderTabContent(recs, ds, allRecs, datasets);
+  }
   // Re-attach filter banner in tab strip
   const filterEl = document.querySelector('.tab-am-filter select');
   if (filterEl) filterEl.value = state.amFilter;
@@ -1783,17 +1829,17 @@ function doAuth() {
 // ─── Upload events — delegated at document level, always active ───
 // Drag-and-drop on dropzone
 document.addEventListener('dragover', e => {
-  const dz = document.getElementById('dropzone');
-  if (dz && dz.contains(e.target)) { e.preventDefault(); dz.classList.add('drag'); }
+  const dz = document.getElementById('up-dropzone');
+  if (dz && dz.contains(e.target)) { e.preventDefault(); if(dz){dz.style.borderColor='#9a6e1a';dz.style.background='rgba(154,110,26,.08)';} }
 });
 document.addEventListener('dragleave', e => {
-  const dz = document.getElementById('dropzone');
-  if (dz && !dz.contains(e.relatedTarget)) dz.classList.remove('drag');
+  const dz = document.getElementById('up-dropzone');
+  if (dz && !dz.contains(e.relatedTarget)) if(dz){dz.style.borderColor='';dz.style.background='';}
 });
 document.addEventListener('drop', e => {
-  const dz = document.getElementById('dropzone');
+  const dz = document.getElementById('up-dropzone');
   if (dz && dz.contains(e.target)) {
-    e.preventDefault(); dz.classList.remove('drag');
+    e.preventDefault(); if(dz){dz.style.borderColor='';dz.style.background='';}
     if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
   }
 });
@@ -1808,7 +1854,7 @@ async function handleFiles(fileList) {
   });
   state.uploadQueue = [...state.uploadQueue.filter(f=>!items.find(n=>n.name===f.name)), ...items];
   state.uploadRunning = true;
-  renderDashContent();
+  updateUploadPanel();
   const typeEl = document.getElementById('upload-type');
   const weekEl = document.getElementById('upload-week');
   const monthEl = document.getElementById('upload-month');
@@ -1835,7 +1881,7 @@ async function handleFiles(fileList) {
   }
   state.uploadRunning = false;
   renderDashContent();
-  const fi2=document.getElementById('tii-file-input'); if(fi2)fi2.value='';
+  try{const fi2=document.getElementById('fileUpload');if(fi2)fi2.value='';}catch{}
 }
 
 // ─── AI ───────────────────────────────────────────────────
