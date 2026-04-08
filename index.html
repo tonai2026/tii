@@ -375,25 +375,25 @@ const MONTH_NAMES_MAP = {january:'01',february:'02',march:'03',april:'04',may:'0
 // ═══════════════════════════════════════════════════════════
 const state = {
   auth: null,            // null | 'viewer' | 'admin'
-  screen: 'home',       // 'home' | 'sales-hub' | 'dashboard'
+  screen: 'home',
   tab: 'summary',
-  activeId: null,
   drillDown: null,       // null | {level:'am',am} | {level:'customer',am,customerKey,customerName}
   amFilter: '',
   isDark: false,
-  datasets: [],
-  uploadQueue: [],
-  uploadRunning: false,
-  sortCol: '',
-  sortDir: 'desc',
+  // Data — loaded from /data/ folder, never localStorage
+  monthData: [],         // [{monthKey:'2025-08', label:'August 2025', records:[...]}]
+  selectedMonth: 'all', // 'all' | 'YYYY-MM'
+  loadState: 'idle',    // 'idle' | 'loading' | 'ready' | 'error'
+  loadError: '',
+  // UI state
   showGeneral: true,
-  search: '',
   normlogOpen: false,
   aiHistory: [],
   aiOpen: false,
-  authMode: 'viewer',   // 'viewer' | 'admin'
+  authMode: 'viewer',
   authError: false,
-  deleteConfirm: null,  // id to confirm delete
+  uploadQueue: [],
+  uploadRunning: false,
 };
 
 function setState(updates) {
@@ -402,40 +402,81 @@ function setState(updates) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// STORAGE
+// DATA — loaded from /data/ folder, shared across all devices
 // ═══════════════════════════════════════════════════════════
-const STORE_KEY = 'tii_ds_v2';
 
-function storageAll() {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch { return {}; }
+// Extract YYYY-MM from filename like "2025-08 - August EOM.xlsx"
+function monthKeyFromFilename(name) {
+  const m = name.match(/^(\d{4})-(\d{2})\s*-/);
+  if (m) return `${m[1]}-${m[2]}`;
+  return null;
 }
-function storageSave(all) {
-  localStorage.setItem(STORE_KEY, JSON.stringify(all));
+
+// Human label: "2025-08" → "August 2025"
+const MONTH_FULL = ['','January','February','March','April','May','June',
+  'July','August','September','October','November','December'];
+function monthLabel(mk) {
+  const m = mk.match(/^(\d{4})-(\d{2})$/);
+  if (!m) return mk;
+  return (MONTH_FULL[parseInt(m[2])]||m[2]) + ' ' + m[1];
 }
-function storageList() {
-  return Object.values(storageAll())
-    .map(d=>({id:d.id,type:d.type,monthKey:d.monthKey,week:d.week,
-              isLocked:d.isLocked,uploadedAt:d.uploadedAt,metadata:d.metadata}))
-    .sort((a,b)=>b.monthKey.localeCompare(a.monthKey));
+
+// All records for currently selected month (or all months combined)
+function activeRecords() {
+  if (!state.monthData.length) return [];
+  let recs;
+  if (state.selectedMonth === 'all') {
+    recs = state.monthData.flatMap(m => m.records);
+  } else {
+    const md = state.monthData.find(m => m.monthKey === state.selectedMonth);
+    recs = md ? md.records : [];
+  }
+  if (state.amFilter) recs = recs.filter(r => r.accountManager === state.amFilter);
+  return recs;
 }
-function storageGet(id) { return storageAll()[id]||null; }
-function storageStore(normResult, dataType, week) {
-  const {metadata} = normResult;
-  const weekStr = week!=null ? String(week) : 'final';
-  const id = `${metadata.monthKey}_${dataType}_${weekStr}`;
-  const env = {id, type:dataType, monthKey:metadata.monthKey, week,
-    isLocked:dataType==='final', uploadedAt:new Date().toISOString(),
-    metadata, rawRows:normResult.rawRows, analysisRecords:normResult.analysisRecords};
-  const all = storageAll();
-  all[id] = env;
-  storageSave(all);
-  return env;
+
+// All records for drilldowns (ignore amFilter, respect selectedMonth)
+function allActiveRecords() {
+  if (!state.monthData.length) return [];
+  if (state.selectedMonth === 'all') return state.monthData.flatMap(m => m.records);
+  const md = state.monthData.find(m => m.monthKey === state.selectedMonth);
+  return md ? md.records : [];
 }
-function storageDelete(id) { const all=storageAll(); delete all[id]; storageSave(all); }
-function storageDeleteAll() { storageSave({}); }
-function storageLatestId() {
-  const list = storageList();
-  return list.length ? list[0].id : null;
+
+// Has data loaded?
+function hasData() { return state.monthData.length > 0; }
+
+// ─── Load all files from /data/ ──────────────────────────
+async function loadFromDataFolder() {
+  setState({ loadState: 'loading' });
+  try {
+    // 1. Fetch the file manifest
+    const res = await fetch('/data/files.json');
+    if (!res.ok) throw new Error('Could not load /data/files.json — make sure it exists');
+    const filenames = await res.json(); // ["2025-07 - July EOM.xlsx", ...]
+
+    // 2. Parse each file
+    const results = [];
+    for (const name of filenames) {
+      const mk = monthKeyFromFilename(name);
+      if (!mk) { console.warn('Skipping — bad filename:', name); continue; }
+      try {
+        const buf = await (await fetch(`/data/${encodeURIComponent(name)}`)).arrayBuffer();
+        const parsed = await parseXLSX(buf, mk);
+        results.push({ monthKey: mk, label: monthLabel(mk), records: parsed.analysisRecords });
+      } catch(e) { console.warn('Failed to load', name, e.message); }
+    }
+
+    // 3. Sort oldest → newest
+    results.sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+
+    // 4. Default to latest month
+    const latest = results.length ? results[results.length - 1].monthKey : 'all';
+
+    setState({ monthData: results, selectedMonth: latest, loadState: 'ready' });
+  } catch(e) {
+    setState({ loadState: 'error', loadError: e.message });
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -822,17 +863,7 @@ function svgHBar(data, w=400, rowH=24) {
 // ═══════════════════════════════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════════════════════════════
-function activeDataset() {
-  if (!state.activeId) return null;
-  return storageGet(state.activeId);
-}
-function activeRecords() {
-  const ds = activeDataset();
-  if (!ds) return [];
-  const recs = ds.analysisRecords||[];
-  if (!state.amFilter) return recs;
-  return recs.filter(r=>r.accountManager===state.amFilter);
-}
+
 function allAMs(records) {
   return [...new Set(records.map(r=>r.accountManager).filter(Boolean))].sort();
 }
@@ -852,6 +883,38 @@ function progBarHtml(pct, color) {
 // ═══════════════════════════════════════════════════════════
 // SCREEN RENDERERS
 // ═══════════════════════════════════════════════════════════
+
+
+function renderLoading() {
+  return `<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:20px;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+    <div style="font-size:14px;font-weight:800;color:var(--gold);letter-spacing:-.5px">TII</div>
+    <div style="display:flex;gap:6px">${[0,1,2].map(i=>
+      `<div style="width:8px;height:8px;border-radius:50%;background:var(--gold);
+        animation:pulse 1.2s ease-in-out ${i*0.2}s infinite"></div>`
+    ).join('')}</div>
+    <div style="font-size:13px;color:var(--text2)">Loading data…</div>
+    <style>@keyframes pulse{0%,100%{opacity:.2;transform:scale(.8)}50%{opacity:1;transform:scale(1)}}</style>
+  </div>`;
+}
+
+function renderLoadError() {
+  return `<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:16px;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;text-align:center;padding:20px">
+    <div style="font-size:32px">⚠️</div>
+    <div style="font-size:16px;font-weight:600;color:var(--text)">Could not load data</div>
+    <div style="font-size:13px;color:var(--text2);max-width:340px;line-height:1.6">${state.loadError}</div>
+    <div style="font-size:12px;color:var(--text2);max-width:340px;line-height:1.6;
+      background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:12px">
+      Make sure <b style="color:var(--text)">/data/files.json</b> exists in your GitHub repo
+      and lists your Excel files.<br><br>
+      Example:<br>
+      <code style="color:var(--gold)">["2025-07 - July EOM.xlsx","2025-08 - August EOM.xlsx"]</code>
+    </div>
+    <button onclick="location.reload()" style="padding:8px 20px;background:var(--gold);border:none;
+      border-radius:8px;color:#fff;font-size:13px;font-weight:600;cursor:pointer">Retry</button>
+  </div>`;
+}
 
 function renderAuth() {
   const isAdmin = state.authMode === 'admin';
@@ -977,18 +1040,17 @@ function renderPlaceholder(id) {
 
 // ─── Dashboard shell ──────────────────────────────────────
 function renderDashboard() {
-  const ds = activeDataset();
-  const recs = activeRecords();
-  const allRecs = ds?.analysisRecords||[];
-  const datasets = storageList();
-  const ams = allAMs(allRecs);
+  const recs    = activeRecords();
+  const allRecs = allActiveRecords();
+  const ams     = allAMs(allRecs);
+  const hasDs   = hasData();
 
   // AI bar
   const aiHtml = `
   <div class="ai-input-wrap">
     <span class="ai-icon">🤖</span>
     <input class="ai-input" id="ai-input" placeholder="Ask anything about sales, customers, budgets…"
-      data-action-keyenter="ai-ask" ${!ds?'disabled title="Load a dataset first"':''}>
+      data-action-keyenter="ai-ask" ${!hasDs?'disabled title="Loading data…"':''}>
     <button class="ai-ask-btn" data-action="ai-ask">Ask</button>
     <div class="ai-answer-drop ${state.aiOpen&&state.aiHistory.length?'open':''}" id="ai-drop">
       ${state.aiHistory.length?`
@@ -1007,9 +1069,9 @@ function renderDashboard() {
   // Tab strip
   const VIEWER_TABS = [['summary','Summary'],['am','Account Managers'],['customers','Customers'],
     ['budget','Budget Performance'],['pace','Pace & Forecast'],['notifications','Notifications'],['excel','Source File']];
-  const ADMIN_TABS  = [...VIEWER_TABS,['upload','Upload'],['debug','Debug']];
+  const ADMIN_TABS  = [...VIEWER_TABS,['debug','Debug']];
   const tabs = state.auth==='admin' ? ADMIN_TABS : VIEWER_TABS;
-  const showAMFilter = AM_FILTER_TABS.has(state.tab) && ams.length>0 && ds;
+  const showAMFilter = AM_FILTER_TABS.has(state.tab) && ams.length>0 && hasDs;
 
   const tabHtml = tabs.map(([k,l])=>{
     const isAM = k==='am';
@@ -1019,17 +1081,21 @@ function renderDashboard() {
     </button>`;
   }).join('');
 
-  const dsOpts = datasets.map((d,i)=>
-    `<option value="${d.id}" ${d.id===state.activeId?'selected':''}>${fmtDSLabel(d,i===0)}</option>`
-  ).join('');
+  // Month selector options — All Months + each loaded month, newest first in display but sorted oldest→newest in array
+  const monthOpts = [
+    `<option value="all" ${state.selectedMonth==='all'?'selected':''}>All Months</option>`,
+    ...[...state.monthData].reverse().map(m =>
+      `<option value="${m.monthKey}" ${m.monthKey===state.selectedMonth?'selected':''}>${m.label}</option>`
+    )
+  ].join('');
 
   const amOpts = `<option value="">All AMs</option>${ams.map(a=>`<option value="${a}" ${a===state.amFilter?'selected':''}>${a}</option>`).join('')}`;
 
   const tabStrip = `
   <div class="tab-strip">
-    ${datasets.length?`<div class="tab-report-select">
-      <label>Report</label>
-      <select data-action="set-dataset">${dsOpts}</select>
+    ${state.monthData.length?`<div class="tab-report-select">
+      <label>Month</label>
+      <select data-action="set-month">${monthOpts}</select>
     </div>`:''}
     ${tabHtml}
     ${showAMFilter?`<div class="tab-am-filter">
@@ -1045,10 +1111,10 @@ function renderDashboard() {
     bodyHtml = renderCustomerDrill(allRecs);
   } else if (state.drillDown?.level==='am') {
     bodyHtml = renderAMDrill(allRecs);
-  } else if (!ds) {
+  } else if (!hasDs) {
     bodyHtml = renderNoData();
   } else {
-    bodyHtml = renderTabContent(recs, ds, allRecs, datasets);
+    bodyHtml = renderTabContent(recs, null, allRecs, []);
   }
 
   return `
@@ -1075,7 +1141,7 @@ function renderDashboard() {
   </div>
   <div class="dash-footer">
     <span><b style="color:var(--gold)">TII</b> · Sales Dashboard</span>
-    <span>${ds?`${(ds.analysisRecords||[]).length} records · ${new Set((ds.analysisRecords||[]).map(r=>r.customerKey)).size} customers`:'No data loaded'}</span>
+    <span>${hasDs?`${allRecs.length} records · ${new Set(allRecs.map(r=>r.customerKey)).size} customers · ${state.selectedMonth==='all'?'All Months':monthLabel(state.selectedMonth)}`:'Loading…'}</span>
   </div>
 </div>`;
 }
@@ -1083,16 +1149,12 @@ function renderDashboard() {
 function renderNoData() {
   return `<div class="no-data">
     <div class="no-data-icon">📊</div>
-    <div class="no-data-title">No data loaded</div>
-    <div class="no-data-desc">
-      ${state.auth==='admin'
-        ?`Go to <button class="no-data-link" data-action="set-tab:upload">Upload</button> to add a file.`
-        :'Ask your administrator to load data.'}
-    </div>
+    <div class="no-data-title">No data available</div>
+    <div class="no-data-desc">Add Excel files to the <b>/data/</b> folder in your GitHub repo.</div>
   </div>`;
 }
 
-function renderTabContent(recs, ds, allRecs, datasets) {
+function renderTabContent(recs, _ds, allRecs, _datasets) {
   const tab = state.tab;
   let filterBanner = '';
   if (state.amFilter && AM_FILTER_TABS.has(tab)) {
@@ -1102,7 +1164,7 @@ function renderTabContent(recs, ds, allRecs, datasets) {
       <button class="filter-banner-clear" data-action="clear-am-filter">✕ Clear filter</button>
     </div>`;
   }
-  const normLog = (state.auth==='admin' && ds) ? renderNormLog(ds) : '';
+  const normLog = '';
   const content = (() => {
     if (tab==='summary')  return renderSummary(recs);
     if (tab==='am')       return renderAMTab(allRecs);
@@ -1111,8 +1173,7 @@ function renderTabContent(recs, ds, allRecs, datasets) {
     if (tab==='pace')     return renderPace(recs);
     if (tab==='notifications') return renderNotifications(recs);
     if (tab==='excel')    return renderSourceFile(ds);
-    if (tab==='upload' && state.auth==='admin') return renderUpload(datasets);
-    if (tab==='debug' && state.auth==='admin') return renderDebug(ds);
+    if (tab==='debug' && state.auth==='admin') return renderDebug(null);
     return '<p style="color:var(--text2);font-size:13px;padding:20px">Coming soon.</p>';
   })();
   return `${normLog}${filterBanner}${content}`;
@@ -1442,42 +1503,20 @@ function renderNotifications(recs) {
 }
 
 // ─── Source File ──────────────────────────────────────────
-function renderSourceFile(ds) {
-  if (!ds?.rawRows) return '<div style="font-size:13px;color:var(--text2);padding:16px">No source file available.</div>';
-  const rows = ds.rawRows;
-  const hdrIdx = TIG_SCHEMA.headerRowIndex;
-  const search = state._xlSearch||'';
-  const filtered = search ? rows.filter(r=>(r||[]).some(c=>String(c||'').toLowerCase().includes(search.toLowerCase()))) : rows;
-  const rowsHtml = filtered.slice(0,200).map((row,ri)=>{
-    const isHdr = ri===hdrIdx;
-    const bg = isHdr?(state.isDark?'#1a1d28':'#eef2ff'):'transparent';
-    return `<tr style="background:${bg}">
-      <td style="padding:2px 6px;font-size:10px;color:var(--text2);border-right:1px solid var(--border2);text-align:right">${ri+1}</td>
-      ${(row||[]).map(cell=>`<td style="padding:2px 10px;font-size:11px;white-space:nowrap;color:${isHdr?'var(--gold)':cell==null||cell===''?'var(--text3)':'var(--text)'};font-weight:${isHdr?700:400};border-right:1px solid var(--border2)">${cell==null||cell===''?'':String(cell)}</td>`).join('')}
-    </tr>`;
-  }).join('');
-
-  return `<div class="panel" style="padding:0">
-    <div style="padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
-      <div style="font-size:13px;font-weight:600;color:var(--text)">📄 ${ds.metadata?.fileName||'Source file'}</div>
-      <div style="font-size:12px;color:var(--text2)">${rows.length} rows</div>
-      <input class="search-bar" style="margin-left:auto" id="xl-search" placeholder="Search rows…" value="${search}" data-action="xl-search">
-    </div>
-    <div style="overflow:auto;max-height:calc(100vh - 320px);border-radius:0 0 10px 10px">
-      <table style="border-collapse:collapse;font-size:11px;white-space:nowrap;min-width:100%">
-        <tbody>${rowsHtml}</tbody>
-      </table>
-    </div>
-    ${filtered.length>200?`<div style="padding:8px 16px;font-size:11px;color:var(--text2)">Showing first 200 of ${filtered.length} rows</div>`:''}
+function renderSourceFile(_ds) {
+  if (!state.monthData.length) return '<div style="font-size:13px;color:var(--text2);padding:16px">No data loaded.</div>';
+  return `<div class="panel"><div class="shead"><span class="shead-title">Loaded Data Files (${state.monthData.length})</span></div>
+    ${state.monthData.map(m=>`
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border2)">
+        <div style="font-size:22px">📊</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${m.label}</div>
+          <div style="font-size:11px;color:var(--text2)">${m.records.length} records · ${new Set(m.records.map(r=>r.customerKey)).size} customers</div>
+        </div>
+        <div style="font-size:11px;padding:3px 10px;border-radius:100px;background:var(--green-d);color:var(--green);font-weight:700">Loaded</div>
+      </div>`).join('')}
   </div>`;
 }
-
-// ─── Upload ───────────────────────────────────────────────
-function renderUpload(datasets) {
-  // Upload UI is rendered by showUploadPanel() — the dropzone lives in static HTML
-  return '<div style="padding:16px;font-size:13px;color:var(--text2)">Loading upload panel…</div>';
-}
-
 // ─── Debug ────────────────────────────────────────────────
 function renderDebug(ds) {
   if (!ds) return '<div style="color:var(--text2);font-size:13px;padding:20px">No dataset loaded.</div>';
@@ -1599,10 +1638,13 @@ function render() {
   document.body.className = state.isDark ? 'dark' : '';
   const app = document.getElementById('app');
   if (!state.auth)                  { app.innerHTML = renderAuth(); focusAuthInput(); return; }
+  // Show loading overlay while data fetches (any screen post-auth)
+  if (state.loadState === 'loading') { app.innerHTML = renderLoading(); return; }
+  if (state.loadState === 'error')   { app.innerHTML = renderLoadError(); return; }
   if (state.screen==='home')        { app.innerHTML = renderHome(); return; }
   if (state.screen==='sales-hub')   { app.innerHTML = renderSalesHub(); return; }
   if (state.screen==='placeholder') { app.innerHTML = renderPlaceholder(state._placeholderId||''); return; }
-  if (state.screen==='dashboard')   { app.innerHTML = renderDashboard(); if(state.tab==='upload'&&state.auth==='admin'){showUploadPanel();}else{hideUploadPanel();} return; }
+  if (state.screen==='dashboard')   { app.innerHTML = renderDashboard(); return; }
 }
 
 function focusAuthInput() {
@@ -1622,7 +1664,7 @@ document.addEventListener('click', e => {
   if (action==='auth-show-admin') { state.authMode='admin'; state.authError=false; render(); focusAuthInput(); return; }
   if (action==='auth-cancel-admin') { state.authMode='viewer'; state.authError=false; render(); focusAuthInput(); return; }
   if (action==='toggle-dark') { setState({isDark:!state.isDark}); return; }
-  if (action==='sign-out') { setState({auth:null,screen:'home',authMode:'viewer',authError:false}); return; }
+  if (action==='sign-out') { try{sessionStorage.removeItem('tii_auth');}catch{} setState({auth:null,screen:'home',authMode:'viewer',authError:false,drillDown:null,amFilter:''}); return; }
   if (action==='go-home') { setState({screen:'home'}); return; }
   if (action==='go-sales-hub') { setState({screen:'sales-hub',drillDown:null}); return; }
   if (action==='go-dashboard') { setState({screen:'dashboard',tab:'summary',drillDown:null}); return; }
@@ -1651,26 +1693,7 @@ document.addEventListener('click', e => {
   if (action==='toggle-general') { state.showGeneral=!state.showGeneral; renderDashContent(); return; }
   if (action==='toggle-normlog') { state.normlogOpen=!state.normlogOpen; renderDashContent(); return; }
   if (action==='clear-am-filter') { setState({amFilter:''}); return; }
-  if (action==='queue-clear') { state.uploadQueue=state.uploadQueue.filter(f=>f.state==='processing'); updateUploadPanel(); return; }
-  if (action==='select-ds') {
-    state.activeId=arg; state.drillDown=null; state.amFilter=''; state.tab='summary';
-    try{sessionStorage.setItem('tii_activeId',arg);}catch{}
-    setState({datasets:storageList()}); return;
-  }
-  if (action==='delete-ds') { e.stopPropagation(); state.deleteConfirm=arg; renderDashContent(); return; }
-  if (action==='cancel-delete') { state.deleteConfirm=null; renderDashContent(); return; }
-  if (action==='confirm-delete') {
-    storageDelete(arg);
-    if(state.activeId===arg){state.activeId=storageLatestId();}
-    state.deleteConfirm=null;
-    setState({datasets:storageList()}); return;
-  }
-  if (action==='delete-all-datasets') {
-    if(confirm('Delete all datasets? This cannot be undone.')) {
-      storageDeleteAll(); state.activeId=null; state.drillDown=null;
-      setState({datasets:storageList()}); return;
-    }
-  }
+  // dataset management removed — data comes from /data/ folder
   if (action==='ai-ask') { doAIAsk(); return; }
   if (action==='ai-clear') { setState({aiHistory:[],aiOpen:false}); return; }
   if (action==='go-placeholder') { state._placeholderId=arg; setState({screen:'placeholder'}); return; }
@@ -1703,92 +1726,15 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const el = e.target;
   // File upload — delegated so it always works regardless of innerHTML re-renders
-  if (el.type === 'file' && el.id === 'fileUpload') {
-    console.log('FILE SELECTED:', el.files?.length, 'files');
-    if (el.files && el.files.length) handleFiles(el.files);
-    return;
-  }
-  if (el.dataset.action==='set-dataset') {
-    state.activeId=el.value; state.drillDown=null; state.amFilter=''; state.tab='summary';
-    try{sessionStorage.setItem('tii_activeId',el.value);}catch{}
+  if (el.type === 'file' && el.id === 'fileUpload') { /* upload removed */ return; }
+  if (el.dataset.action==='set-month') {
+    state.selectedMonth=el.value; state.drillDown=null; state.amFilter='';
     renderDashContent(); return;
   }
   if (el.dataset.action==='set-am-filter') { setState({amFilter:el.value}); return; }
   if (el.dataset.action==='toggle-general') { state.showGeneral=el.checked; renderDashContent(); return; }
 });
 
-// ─── Upload panel: show/hide the static fixed panel ───────────
-function showUploadPanel() {
-  const panel = document.getElementById('up-panel');
-  if (!panel) return;
-  panel.style.display = 'block';
-  updateUploadPanel();
-}
-function hideUploadPanel() {
-  const p = document.getElementById('up-panel');
-  if (p) p.style.display = 'none';
-}
-function updateUploadPanel() {
-  const datasets = storageList();
-  // Queue
-  const qEl = document.getElementById('up-queue');
-  if (qEl) qEl.innerHTML = renderQueueHtml();
-  // Data manager
-  const dmEl = document.getElementById('up-dm');
-  if (dmEl) dmEl.innerHTML = renderDMHtml(datasets);
-}
-function renderQueueHtml() {
-  if (!state.uploadQueue.length) return '';
-  const done = state.uploadQueue.filter(f=>f.state==='ok').length;
-  return '<div class="queue-wrap">' +
-    '<div class="queue-header"><span>' +
-    (state.uploadRunning ? 'Processing…' : done+'/'+state.uploadQueue.length+' complete') +
-    '</span>' +
-    (!state.uploadRunning ? '<button data-action="queue-clear" style="font-size:11px;color:var(--text2);background:transparent;border:none;cursor:pointer;text-decoration:underline">Clear done</button>' : '') +
-    '</span></div>' +
-    state.uploadQueue.map(f=>
-      '<div class="queue-item '+f.state+'">' +
-      '<div class="qi-status" style="color:'+
-        (f.state==='ok'?'var(--green)':f.state==='error'?'var(--red)':f.state==='processing'?'var(--gold)':'var(--text2)')+
-        '">'+
-        (f.state==='ok'?'✓':f.state==='error'?'✗':f.state==='processing'?'⋯':'·')+
-      '</div>' +
-      '<div style="flex:1;min-width:0"><div class="qi-name">'+f.name+'</div>' +
-      (f.detectedMonth ? '<div class="qi-month">→ '+f.detectedMonth+'</div>' : '')+
-      (f.msg ? '<div style="font-size:11px;color:'+( f.state==='error'?'var(--red)':'var(--green)')+'">'+f.msg+'</div>' : '')+
-      '</div>' +
-      '<div class="qi-size">'+(f.size/1024).toFixed(0)+' KB</div>' +
-      '</div>'
-    ).join('') +
-    '</div>';
-}
-function renderDMHtml(datasets) {
-  if (!datasets.length) return '<div style="font-size:13px;color:var(--text2);padding:16px;text-align:center">No datasets yet.</div>';
-  const byMonth = {};
-  for (const d of datasets) { if (!byMonth[d.monthKey]) byMonth[d.monthKey]=[]; byMonth[d.monthKey].push(d); }
-  let html = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">' +
-    '<span class="shead-title">Stored Datasets</span>' +
-    '<button class="delete-all-btn" data-action="delete-all-datasets">🗑 Delete all</button>' +
-    '</div>';
-  html += Object.entries(byMonth).sort(([a],[b])=>b.localeCompare(a)).map(([month,items])=>
-    '<div class="dm-group">' +
-    '<div class="dm-group-hdr"><span class="dm-group-title">'+fmtMonth(month)+'</span><span class="dm-group-count">'+items.length+' file'+(items.length!==1?'s':'')+'</span></div>' +
-    items.map(d=>
-      '<div class="dm-row '+( d.id===state.activeId?'active-ds':'')+'" data-action="select-ds:'+d.id+'">' +
-      '<div class="dm-badge '+( d.type==='final'?'':'weekly')+'">'+( d.type==='final'?'Final':'W'+(d.week||'?'))+'</div>' +
-      '<div style="flex:1;min-width:0"><div class="dm-name">'+( d.metadata?.fileName||d.id)+'</div>' +
-      '<div class="dm-meta">'+d.metadata?.customerCount+' customers · '+new Date(d.uploadedAt).toLocaleDateString('en-AU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+'</div></div>' +
-      (d.id===state.activeId?'<div class="dm-active-dot">● active</div>':'')+
-      (state.deleteConfirm===d.id
-        ?'<button data-action="confirm-delete:'+d.id+'" style="padding:4px 10px;background:var(--red);border:none;border-radius:5px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;margin-right:4px">Delete</button>' +
-          '<button data-action="cancel-delete" style="padding:4px 8px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--text2);font-size:11px;cursor:pointer">Cancel</button>'
-        :'<button class="dm-del" data-action="delete-ds:'+d.id+'" title="Delete">🗑</button>')+
-      '</div>'
-    ).join('') +
-    '</div>'
-  ).join('');
-  return html;
-}
 
 function renderDashContent() {
   const el = document.getElementById('dash-content');
@@ -1796,14 +1742,7 @@ function renderDashContent() {
   const ds = activeDataset();
   const recs = activeRecords();
   const allRecs = ds?.analysisRecords||[];
-  const datasets = storageList();
-  if (state.tab === 'upload' && state.auth === 'admin') {
-    el.innerHTML = '';
-    showUploadPanel();
-  } else {
-    hideUploadPanel();
-    el.innerHTML = renderTabContent(recs, ds, allRecs, datasets);
-  }
+  el.innerHTML = renderTabContent(recs, null, allRecs, []);
   // Re-attach filter banner in tab strip
   const filterEl = document.querySelector('.tab-am-filter select');
   if (filterEl) filterEl.value = state.amFilter;
@@ -1818,8 +1757,7 @@ function doAuth() {
   if (pw===expected) {
     const auth = state.authMode;
     try{sessionStorage.setItem('tii_auth',auth);}catch{}
-    const saved = (() => { try { const s=sessionStorage.getItem('tii_activeId'); return s&&storageGet(s)?s:storageLatestId(); } catch { return storageLatestId(); } })();
-    setState({auth, screen:'home', authError:false, datasets:storageList(), activeId:saved||state.activeId});
+    setState({auth, screen:'home', authError:false});
   } else {
     state.authError=true; render();
     setTimeout(()=>{ const el=document.getElementById('auth-pw'); if(el){el.value='';el.focus();} state.authError=false; setTimeout(render,1800); },50);
@@ -1828,115 +1766,17 @@ function doAuth() {
 
 // ─── Upload events — delegated at document level, always active ───
 // Drag-and-drop on dropzone
-document.addEventListener('dragover', e => {
-  const dz = document.getElementById('up-dropzone');
-  if (dz && dz.contains(e.target)) { e.preventDefault(); if(dz){dz.style.borderColor='#9a6e1a';dz.style.background='rgba(154,110,26,.08)';} }
-});
-document.addEventListener('dragleave', e => {
-  const dz = document.getElementById('up-dropzone');
-  if (dz && !dz.contains(e.relatedTarget)) if(dz){dz.style.borderColor='';dz.style.background='';}
-});
-document.addEventListener('drop', e => {
-  const dz = document.getElementById('up-dropzone');
-  if (dz && dz.contains(e.target)) {
-    e.preventDefault(); if(dz){dz.style.borderColor='';dz.style.background='';}
-    if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
-  }
-});
-function attachUploadEvents() {} // kept as no-op for any remaining calls
-
-async function handleFiles(fileList) {
-  const files = [...fileList].filter(f=>/\.xlsx?$/i.test(f.name));
-  if (!files.length) return;
-  const items = files.map(f=>{
-    const detected = parseMonthFromFilename(f.name);
-    return {name:f.name,size:f.size,state:'pending',file:f,detectedMonth:detected};
-  });
-  state.uploadQueue = [...state.uploadQueue.filter(f=>!items.find(n=>n.name===f.name)), ...items];
-  state.uploadRunning = true;
-  updateUploadPanel();
-  const typeEl = document.getElementById('upload-type');
-  const weekEl = document.getElementById('upload-week');
-  const monthEl = document.getElementById('upload-month');
-  const dataType = typeEl?.value||'final';
-  const week = parseInt(weekEl?.value||'1');
-  const fallbackMonth = monthEl?.value?.trim()||'';
-  for (const item of items) {
-    const idx = state.uploadQueue.findIndex(f=>f.name===item.name);
-    if (idx>=0) state.uploadQueue[idx].state='processing';
-    renderDashContent();
-    try {
-      const buf = await item.file.arrayBuffer();
-      const effectiveMonth = item.detectedMonth || fallbackMonth || new Date().toISOString().slice(0,7);
-      const result = await parseXLSX(buf, effectiveMonth);
-      const env = storageStore(result, dataType, dataType==='weekly'?week:null);
-      if (idx>=0) { state.uploadQueue[idx].state='ok'; state.uploadQueue[idx].msg=`${result.metadata.customerCount} customers · ${fmtMonth(effectiveMonth)}`; }
-      state.activeId = env.id;
-      try{sessionStorage.setItem('tii_activeId',env.id);}catch{}
-      state.datasets = storageList();
-    } catch(err) {
-      if (idx>=0) { state.uploadQueue[idx].state='error'; state.uploadQueue[idx].msg=err.message; }
-    }
-    renderDashContent();
-  }
-  state.uploadRunning = false;
-  renderDashContent();
-  try{const fi2=document.getElementById('fileUpload');if(fi2)fi2.value='';}catch{}
-}
-
-// ─── AI ───────────────────────────────────────────────────
-async function doAIAsk() {
-  const input = document.getElementById('ai-input');
-  if (!input) return;
-  const q = input.value.trim();
-  if (!q) return;
-  const ds = activeDataset();
-  if (!ds) { alert('Load a dataset first.'); return; }
-  input.value = '';
-  input.disabled = true;
-  const recs = ds.analysisRecords||[];
-  const context = {
-    summary:{totalSales:getTotalSales(recs),totalBudget:getTotalBudget(recs),pct:safePct(getTotalSales(recs),getTotalBudget(recs))},
-    am:getAMs(recs),
-    pace:computePace(recs),
-  };
-  const systemPrompt = `You are a sales analyst for Total Image Group (TIG).
-Answer questions about the sales data. Plain prose only. No markdown, no asterisks. Max 3 sentences. Be direct and specific with numbers.
-Data: ${JSON.stringify(context)}`;
-  try {
-    const res = await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:200,system:systemPrompt,
-        messages:[...state.aiHistory.map(h=>h.msgs).flat(),{role:'user',content:q}]})
-    });
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
-    const ans = (data.content?.[0]?.text||'No response').replace(/\*\*(.+?)\*\*/g,'$1').trim();
-    state.aiHistory = [...state.aiHistory,{q,a:ans,msgs:[{role:'user',content:q},{role:'assistant',content:ans}]}];
-  } catch(err) {
-    state.aiHistory = [...state.aiHistory,{q,a:`Could not connect to AI: ${err.message}`,msgs:[]}];
-  }
-  input.disabled = false;
-  input.focus();
-  state.aiOpen = true;
-  render();
-}
 
 // ═══════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════
 (function init() {
-  // Restore session
+  // Restore auth session
   try {
     const auth = sessionStorage.getItem('tii_auth');
-    if (auth==='admin'||auth==='viewer') {
-      state.auth = auth;
-      state.datasets = storageList();
-      const saved = sessionStorage.getItem('tii_activeId');
-      state.activeId = (saved && storageGet(saved)) ? saved : storageLatestId();
-    }
+    if (auth==='admin'||auth==='viewer') state.auth = auth;
   } catch {}
-  // Dark mode preference
+  // Dark mode
   try {
     if (localStorage.getItem('tii_dark')==='1') state.isDark=true;
   } catch {}
@@ -1945,6 +1785,8 @@ Data: ${JSON.stringify(context)}`;
       try{localStorage.setItem('tii_dark',state.isDark?'1':'0');}catch{}
     }
   });
+  // Load data from /data/ folder — happens once, shared across all users
+  loadFromDataFolder();
   render();
 })();
 </script>
