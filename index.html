@@ -308,41 +308,70 @@ const TIG_SCHEMA = {
   },
 };
 
-// ─── Layout detector — scan header row, no fallback ──────
+// ─── Excel date serial → YYYY-MM ─────────────────────────
+// Excel stores dates as integers (days since 1899-12-30)
+function excelSerialToMonthKey(serial) {
+  if (typeof serial !== 'number' || serial < 40000 || serial > 50000) return null;
+  const d = new Date(Math.round((serial - 25569) * 86400000));
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  // Only accept fiscal year months 2025-07 → 2026-06
+  const mk = `${y}-${m}`;
+  const valid = ['2025-07','2025-08','2025-09','2025-10','2025-11','2025-12',
+                 '2026-01','2026-02','2026-03','2026-04','2026-05','2026-06'];
+  return valid.includes(mk) ? mk : null;
+}
+
+// ─── Layout detector ──────────────────────────────────────
 function detectLayout(rawRows) {
   const S = TIG_SCHEMA;
+  // TIG file structure (known positions — used as fallback)
+  const KNOWN = { typeCol:3, amCol:0, customerCol:2, dataStartRow:2,
+    monthCols:{'4':'2025-07','5':'2025-08','6':'2025-09','7':'2025-10','8':'2025-11','9':'2025-12',
+               '10':'2026-01','11':'2026-02','12':'2026-03','13':'2026-04','14':'2026-05','15':'2026-06'} };
+
   let headerRowIdx = -1, typeCol = -1, amCol = 0, customerCol = -1;
   const monthCols = {};
 
-  // Find header row by locating "customer" cell (first 15 rows)
+  // 1. Find header row — look for "customer" in first 15 rows
   for (let r = 0; r < Math.min(rawRows.length, 15); r++) {
-    const cells = (rawRows[r]||[]).map(c => String(c||'').toLowerCase().trim());
-    const ci = cells.findIndex(c => c.includes('customer'));
+    const row   = rawRows[r] || [];
+    const cells = row.map(c => String(c||'').toLowerCase().trim());
+    const ci    = cells.findIndex(c => c.includes('customer'));
     if (ci < 0) continue;
     headerRowIdx = r;
     customerCol  = ci;
-    amCol        = 0; // AM is always col 0
+    amCol        = 0;
 
-    // Type col: find "actual" or "budget" in same header row
+    // 2. Find type col in header row (label "actual" or "budget")
+    //    OR data rows (values "Actual" / "Budget")
     for (let c2 = 0; c2 < cells.length; c2++) {
-      if (cells[c2] === 'actual' || cells[c2] === 'budget') { typeCol = c2; break; }
+      if (cells[c2] === 'actual' || cells[c2] === 'budget'
+          || cells[c2].includes('actual') ) { typeCol = c2; break; }
     }
 
-    // Month cols: match "jul-25" style or plain "jul" in header row
+    // 3a. Month cols — text headers like "Jul-25" or "Jul"
     for (let c2 = 0; c2 < cells.length; c2++) {
       const cell = cells[c2];
       if (S.monthHeaderMap[cell]) { monthCols[c2] = S.monthHeaderMap[cell]; continue; }
-      // Partial match e.g. "jul 2025" starts with "jul"
       for (const [pat, mk] of Object.entries(S.monthHeaderMap)) {
         if (pat.length >= 3 && cell.startsWith(pat)) { monthCols[c2] = mk; break; }
+      }
+    }
+
+    // 3b. Month cols — Excel date serial numbers in header row
+    if (Object.keys(monthCols).length === 0) {
+      for (let c2 = 0; c2 < row.length; c2++) {
+        const mk = excelSerialToMonthKey(row[c2]);
+        if (mk) monthCols[c2] = mk;
       }
     }
     break;
   }
 
-  // If type col missing, scan first data rows for "Actual"/"Budget"
+  // 4. If type col still missing, scan data rows for "Actual"
   if (typeCol < 0 && headerRowIdx >= 0) {
-    outer: for (let r = headerRowIdx+1; r < Math.min(rawRows.length, headerRowIdx+8); r++) {
+    outer: for (let r = headerRowIdx+1; r < Math.min(rawRows.length, headerRowIdx+10); r++) {
       const row = rawRows[r]||[];
       for (let c2 = 0; c2 < row.length; c2++) {
         if (String(row[c2]||'').trim() === 'Actual') { typeCol = c2; break outer; }
@@ -350,9 +379,17 @@ function detectLayout(rawRows) {
     }
   }
 
-  if (headerRowIdx < 0) throw new Error('Header row not found — check file has "Customer Name" column');
-  if (Object.keys(monthCols).length === 0) throw new Error('No month columns found — check headers like "Jul-25"');
+  // 5. Final fallbacks for any still-missing values
+  if (headerRowIdx < 0) {
+    console.warn('TII: header row not found, using known positions');
+    return { headerRowIdx:1, typeCol:KNOWN.typeCol, amCol:KNOWN.amCol,
+             customerCol:KNOWN.customerCol, monthCols:KNOWN.monthCols, dataStartRow:KNOWN.dataStartRow };
+  }
+  if (typeCol < 0)                        { typeCol = KNOWN.typeCol; console.warn('TII: typeCol not detected, using col '+typeCol); }
+  if (customerCol < 0)                    { customerCol = KNOWN.customerCol; }
+  if (Object.keys(monthCols).length === 0){ Object.assign(monthCols, KNOWN.monthCols); console.warn('TII: month cols not detected, using known positions'); }
 
+  console.log('TII layout:', {headerRowIdx, typeCol, amCol, customerCol, monthColCount: Object.keys(monthCols).length});
   return { headerRowIdx, typeCol, amCol, customerCol, monthCols, dataStartRow: headerRowIdx+1 };
 }
 
